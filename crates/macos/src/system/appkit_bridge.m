@@ -225,10 +225,9 @@ AgentDesktopBytesResult agent_desktop_copy_workspace_snapshot_json(void) {
                     }
                     record[@"bundle_id"] = bundle;
                 }
-                NSString *bundleName = agent_desktop_non_blank(
-                    app.bundleURL.lastPathComponent.stringByDeletingPathExtension);
-                if (bundleName != nil && [bundleName lengthOfBytesUsingEncoding:NSUTF8StringEncoding] <= 16384) {
-                    record[@"bundle_name"] = bundleName;
+                NSString *executable = agent_desktop_non_blank(app.executableURL.lastPathComponent);
+                if (executable != nil && [executable lengthOfBytesUsingEncoding:NSUTF8StringEncoding] <= 16384) {
+                    record[@"executable"] = executable;
                 }
                 [records addObject:record];
             }
