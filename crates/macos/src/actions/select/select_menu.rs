@@ -37,8 +37,21 @@ pub(crate) fn select_from_menu(
         Ok(verified) => Ok(verified),
         Err(error) => {
             let _ = crate::actions::ax_helpers::try_ax_action_or_err(element, "AXCancel", deadline);
+            dismiss_open_menu(pid);
             Err(error.with_disposition(DeliverySemantics::delivered_unverified()))
         }
+    }
+}
+
+/// Best-effort cleanup after a failed selection: a menu this call opened must not stay
+/// open, or the next select refuses to reuse it. Runs on its own short deadline because
+/// the operation deadline has usually expired by now.
+fn dismiss_open_menu(pid: i32) {
+    let Ok(cleanup) = Deadline::detached_after(500) else {
+        return;
+    };
+    if let Ok(Some(menu)) = menu_root(pid, cleanup) {
+        let _ = crate::actions::ax_helpers::try_ax_action_or_err(&menu, "AXCancel", cleanup);
     }
 }
 
@@ -98,8 +111,23 @@ pub(crate) fn select_collection_item(
     select_collection_candidate(&candidate, deadline)
 }
 
+/// Opens the control's menu. Chromium answers `AXShowMenu` on a web `<select>` with the
+/// page's context menu, and opens the real popup only while the control is on screen, so
+/// in web content the control is scrolled into view and pressed before `AXShowMenu`.
 fn open_menu(element: &AXElement, deadline: Deadline) -> Result<bool, AdapterError> {
     prepare(element, deadline)?;
+    if crate::tree::web_content::is_inside_web_area(element, deadline) {
+        let _ = crate::actions::ax_helpers::try_ax_action_or_err(
+            element,
+            "AXScrollToVisible",
+            deadline,
+        );
+        prepare(element, deadline)?;
+        if crate::actions::ax_helpers::try_ax_action_or_err(element, "AXPress", deadline)? {
+            return Ok(true);
+        }
+        prepare(element, deadline)?;
+    }
     if crate::actions::ax_helpers::try_ax_action_or_err(element, "AXShowMenu", deadline)? {
         return Ok(true);
     }

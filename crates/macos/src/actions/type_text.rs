@@ -5,6 +5,10 @@ use agent_desktop_core::{
 
 use crate::tree::AXElement;
 
+/// Types `text` into a text control. Headless, Safari and Chromium accept an
+/// `AXSelectedText` write on a web text field and then drop it, so a web field is focused
+/// first (inside its own application) and, when its value did not change, the text is
+/// spliced in at the selection through `AXValue`.
 pub(crate) fn execute_type(
     element: &AXElement,
     text: &str,
@@ -23,10 +27,36 @@ pub(crate) fn execute_type(
             .with_mechanism(StepMechanism::PhysicalSynthetic)
             .with_verified(false));
     }
+    let web = crate::tree::web_content::focus_web_text_control(element, deadline);
+    let web_before = web.then(|| web_value_and_selection(element, deadline));
     insert_selected_text(element, text, deadline)?;
+    if let Some((before, selection)) = web_before
+        && crate::tree::copy_value_typed(element, deadline).unwrap_or_default() == before
+    {
+        let spliced = crate::tree::web_content::splice_at_selection(&before, selection, text);
+        if let Err(error) =
+            crate::actions::ax_helpers::set_ax_value_coerced(element, &spliced, deadline)
+            && crate::tree::copy_value_typed(element, deadline).as_deref() != Some(&spliced)
+        {
+            return Err(error);
+        }
+        return Ok(ActionStep::succeeded("AXValue")
+            .with_mechanism(StepMechanism::SemanticApi)
+            .with_verified(false));
+    }
     Ok(ActionStep::succeeded("AXSelectedText")
         .with_mechanism(StepMechanism::SemanticApi)
         .with_verified(false))
+}
+
+fn web_value_and_selection(
+    element: &AXElement,
+    deadline: Deadline,
+) -> (String, Option<std::ops::Range<usize>>) {
+    (
+        crate::tree::copy_value_typed(element, deadline).unwrap_or_default(),
+        crate::tree::properties::attributes::selected_text_range(element, deadline),
+    )
 }
 
 fn insert_selected_text(

@@ -5,12 +5,18 @@ mod imp {
     use crate::actions::{ax_helpers, chain::chain_delivery::DeliveryOutcome, chain::chain_verify};
     use crate::tree::AXElement;
 
+    /// Writes `value` to `attribute` and reports whether the write is observed. WebKit
+    /// drops an `AXValue` written to a web text field without keyboard focus, so such a
+    /// field is focused first; that stays inside its application and never activates it.
     pub(crate) fn set_dynamic_verified(
         element: &AXElement,
         attribute: &str,
         value: &str,
         deadline: Deadline,
     ) -> Result<DeliveryOutcome, AdapterError> {
+        if attribute == "AXValue" {
+            crate::tree::web_content::focus_web_text_control(element, deadline);
+        }
         prepare(element, deadline)?;
         let uncertain = if attribute == "AXValue" {
             ax_helpers::set_ax_value_coerced(element, value, deadline).err()
