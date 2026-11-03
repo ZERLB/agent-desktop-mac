@@ -17,20 +17,34 @@ pub(crate) fn wait_for_geometry(
     })
 }
 
+/// Waits until `AXMinimized` reads `expected`. While the minimize or restore animation
+/// runs, the window answers `kAXErrorCannotComplete`; that read means "not yet", so it is
+/// retried until the deadline instead of failing an operation that already took effect.
 pub(crate) fn wait_for_minimized(
     element: &crate::tree::AXElement,
     expected: bool,
     deadline: Deadline,
 ) -> Result<(), AdapterError> {
     wait_until(deadline, || {
-        Ok(
-            crate::tree::surface_read::boolean(
-                element,
-                "AXMinimized",
-                deadline_instant(deadline)?,
-            )? == Some(expected),
-        )
+        match crate::tree::surface_read::boolean(
+            element,
+            "AXMinimized",
+            deadline_instant(deadline)?,
+        ) {
+            Ok(value) => Ok(value == Some(expected)),
+            Err(error) if is_retryable_read(&error) => Ok(false),
+            Err(error) => Err(error),
+        }
     })
+}
+
+fn is_retryable_read(error: &AdapterError) -> bool {
+    error
+        .details
+        .as_ref()
+        .and_then(|details| details.get("retryable"))
+        .and_then(serde_json::Value::as_bool)
+        == Some(true)
 }
 
 fn wait_until(
@@ -103,5 +117,26 @@ mod tests {
         assert!(geometry_matches(rounded, expected, true));
         assert!(geometry_matches(rounded, expected, false));
         assert!(!geometry_matches(wrong, expected, false));
+    }
+
+    #[test]
+    fn a_busy_window_read_is_retried_but_other_failures_are_not() {
+        let busy = crate::tree::surface_read::map_error(
+            "AXMinimized",
+            accessibility_sys::kAXErrorCannotComplete,
+        );
+        let gone = crate::tree::surface_read::map_error(
+            "AXMinimized",
+            accessibility_sys::kAXErrorInvalidUIElement,
+        );
+        let denied = crate::tree::surface_read::map_error(
+            "AXMinimized",
+            accessibility_sys::kAXErrorAPIDisabled,
+        );
+
+        assert!(is_retryable_read(&busy));
+        assert!(!is_retryable_read(&gone));
+        assert!(!is_retryable_read(&denied));
+        assert!(!is_retryable_read(&AdapterError::timeout("deadline")));
     }
 }
