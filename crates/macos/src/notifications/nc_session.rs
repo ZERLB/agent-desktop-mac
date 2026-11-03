@@ -272,9 +272,20 @@ fn is_nc_open(_pid: i32, _deadline: Deadline) -> bool {
     false
 }
 
+/// Opens Notification Center by clicking the menu bar clock. The clock's description
+/// is localized ("Reloj", "Horloge", "Uhr"), so the script matches the menu extra's
+/// identifier first and keeps the English description as a fallback.
 #[cfg(target_os = "macos")]
 fn open_nc(deadline: Deadline) -> Result<(), AdapterError> {
     let script = r#"tell application "System Events" to tell its application process "ControlCenter"
+        repeat with candidate in menu bar items of menu bar 1
+            try
+                if value of attribute "AXIdentifier" of candidate is "com.apple.menuextra.clock" then
+                    click candidate
+                    return
+                end if
+            end try
+        end repeat
         click (first menu bar item of menu bar 1 whose description is "Clock")
     end tell"#;
 
