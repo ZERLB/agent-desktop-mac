@@ -43,7 +43,7 @@ open -a Safari http://127.0.0.1:8799/editores.html
 python3 -I zerlb/banco/editores.py Safari --bin target/release/agent-desktop
 ```
 
-Resultado del 3-nov-2026: con la 1.1.0 y los arreglos anteriores, en Chrome for Testing `type` respondía bien en los tres pero la página no recibía nada en el editor simple y borraba el texto del controlado; con esta copia, los tres reciben «Hola, ¿qué tal? ñ 😀» en Chrome for Testing (con la app oculta) y en Safari.
+Resultado del 3-nov-2026: con la 1.1.0 y los arreglos anteriores, en Chrome for Testing `type` respondía bien en los tres pero la página no recibía nada en el editor simple y borraba el texto del controlado; con esta copia, los tres reciben «Hola, ¿qué tal? ñ 😀» en Chrome for Testing (ventana abierta detrás de otras, sin pasar al frente) y en Safari, con el texto al final del campo y `delivered_verified` (10 de 10 seguidos en el editor controlado).
 
 `recorrido.py` imprime cada paso con el método que funcionó, lo que se leyó después, cuánto tardó, y si el puntero o la app al frente cambiaron. Resultado con esta copia (2-nov-2026, macOS 26, sin modo físico): 12 de 12 pasos en Safari, Microsoft Edge y Chrome for Testing, con el puntero quieto; en Chrome for Testing también con la ventana en segundo plano. Con el original 1.0.2, en el mismo banco: 11 de 12 en Chrome for Testing (falla la lista) y 8 de 12 en Safari (fallan la lista y los tres campos de texto).
 
@@ -65,8 +65,9 @@ Paneles de Guardar y Abrir (TextEdit, macOS 26): Guardar funciona sin pantalla (
 
 Prueba del 3-nov-2026 con Chrome for Testing y Safari, para trabajar sin estorbar a quien usa la Mac:
 
-- Con la app oculta (⌘H), `snapshot`, `click`, `scroll-to` y `type` funcionan y la app sigue oculta y sin pasar al frente.
-- En Chromium (Chrome, Edge, apps Electron), una página que **carga o se recarga** con la app oculta o la ventana minimizada no muestra su contenido por accesibilidad hasta que la ventana se ve una vez; ni las opciones de arranque contra el ahorro en segundo plano lo cambian. Después de verse, se puede ocultar y sigue funcionando.
+- **Lo que sí funciona siempre:** la ventana abierta detrás de otras (o en una esquina), sin pasar al frente. `snapshot`, `click`, `scroll-to` y `type` la manejan sin moverle el puntero a nadie, en unos 270 ms por campo.
+- **Con la app oculta (⌘H) funciona a ratos.** La app sigue oculta y sin pasar al frente, pero Chromium (Chrome, Edge, apps Electron) atrasa sus actualizaciones de accesibilidad: el foco y los valores llegan tarde, y `type` en un editor enriquecido falló en las últimas pruebas aunque los campos normales siguieron funcionando.
+- En Chromium, una página que **carga o se recarga** con la app oculta o la ventana minimizada no muestra su contenido por accesibilidad hasta que la ventana se ve una vez; ni las opciones de arranque contra el ahorro en segundo plano lo cambian.
 - `screenshot` de una ventana oculta devuelve el último cuadro de antes de ocultarla, no lo que pasó después: el estado se lee con `get` o `snapshot`.
 - En Safari, dar el foco a un campo web puede pasar Safari al frente (pasaba también antes de estos arreglos).
 
