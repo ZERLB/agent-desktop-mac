@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Banco de pruebas agent-desktop</title>
+<style>
+  body { font: 16px -apple-system, system-ui, sans-serif; margin: 24px; max-width: 640px; }
+  label { display: block; margin: 10px 0 4px; }
+  input[type=text], input[type=email], select, textarea { width: 100%; padding: 6px; font: inherit; }
+  #resultado { margin-top: 16px; padding: 10px; background: #eef; white-space: pre-wrap; }
+  #modal { display: none; position: fixed; inset: 30% 20%; background: #fff; border: 2px solid #333; padding: 16px; }
+  #modal.abierto { display: block; }
+  li { padding: 6px 0; }
+</style>
+</head>
+<body>
+<h1>Banco de pruebas</h1>
+<form id="f" onsubmit="enviar(event)">
+  <label for="nombre">Nombre</label>
+  <input id="nombre" name="nombre" type="text" placeholder="Tu nombre">
+  <label for="correo">Correo</label>
+  <input id="correo" name="correo" type="email" placeholder="correo@ejemplo.com">
+  <label for="plan">Plan</label>
+  <select id="plan" name="plan">
+    <option value="">Elige uno</option>
+    <option value="basico">Básico</option>
+    <option value="pro">Profesional</option>
+    <option value="empresa">Empresa</option>
+  </select>
+  <label><input id="acepto" type="checkbox" name="acepto"> Acepto los términos</label>
+  <fieldset>
+    <legend>Contacto preferido</legend>
+    <label><input type="radio" name="contacto" value="correo"> Por correo</label>
+    <label><input type="radio" name="contacto" value="telefono"> Por teléfono</label>
+  </fieldset>
+  <label for="mensaje">Mensaje</label>
+  <textarea id="mensaje" name="mensaje" rows="3"></textarea>
+  <p><button type="submit">Enviar formulario</button> <button type="button" onclick="abrir()">Abrir ventana</button></p>
+</form>
+<div id="resultado" role="status" aria-live="polite">Sin enviar</div>
+<div id="modal" role="dialog" aria-label="Ventana de prueba"><p>Ventana abierta</p><button type="button" onclick="cerrar()">Cerrar ventana</button></div>
+<h2>Lista larga</h2>
+<ul id="lista"></ul>
+<p><a id="fin" href="#fin" onclick="document.getElementById('resultado').textContent='Llegaste al final'">Enlace del final</a></p>
+<script>
+  const ul = document.getElementById('lista');
+  for (let i = 1; i <= 60; i++) { const li = document.createElement('li'); li.textContent = 'Elemento ' + i; ul.appendChild(li); }
+  function enviar(e) {
+    e.preventDefault();
+    const d = new FormData(document.getElementById('f'));
+    const o = {}; for (const [k, v] of d.entries()) o[k] = v;
+    document.getElementById('resultado').textContent = 'Enviado: ' + JSON.stringify(o);
+  }
+  function abrir() { document.getElementById('modal').classList.add('abierto'); }
+  function cerrar() { document.getElementById('modal').classList.remove('abierto'); document.getElementById('resultado').textContent = 'Ventana cerrada'; }
+</script>
+</body>
+</html>
