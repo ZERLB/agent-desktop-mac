@@ -43,7 +43,7 @@ open -a Safari http://127.0.0.1:8799/editores.html
 python3 -I zerlb/banco/editores.py Safari --bin target/release/agent-desktop
 ```
 
-Resultado del 3-nov-2026: con la 1.1.0 y los arreglos anteriores, en Chrome for Testing `type` respondía bien en los tres pero la página no recibía nada en el editor simple y borraba el texto del controlado; con esta copia, los tres reciben «Hola, ¿qué tal? ñ 😀» en Chrome for Testing (ventana abierta detrás de otras, sin pasar al frente) y en Safari, con el texto al final del campo y `delivered_verified` (10 de 10 seguidos en el editor controlado).
+Resultado del 3-nov-2026: con la 1.1.0 y los arreglos anteriores, en Chrome for Testing `type` respondía bien en los tres pero la página no recibía nada en el editor simple y borraba el texto del controlado; con esta copia, los tres reciben «Hola, ¿qué tal? ñ 😀» en Chrome for Testing (ventana abierta detrás de otras, sin pasar al frente), en Microsoft Edge (instancia aparte con perfil de prueba) y en Safari, con el texto al final del campo y `delivered_verified` (10 de 10 seguidos en el editor controlado). El banco de formularios sigue en 12 de 12 en los tres.
 
 `recorrido.py` imprime cada paso con el método que funcionó, lo que se leyó después, cuánto tardó, y si el puntero o la app al frente cambiaron. Resultado con esta copia (2-nov-2026, macOS 26, sin modo físico): 12 de 12 pasos en Safari, Microsoft Edge y Chrome for Testing, con el puntero quieto; en Chrome for Testing también con la ventana en segundo plano. Con el original 1.0.2, en el mismo banco: 11 de 12 en Chrome for Testing (falla la lista) y 8 de 12 en Safari (fallan la lista y los tres campos de texto).
 
