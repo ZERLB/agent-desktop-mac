@@ -122,6 +122,14 @@ fn dismiss_entry(
         }
     }
 
+    if let Some(close) = super::close_action::custom_close_action(&entry.element, deadline) {
+        let outcome =
+            crate::actions::ax_helpers::try_ax_action_or_err(&entry.element, &close, deadline);
+        if strategy_verified(outcome, entry, filter, matching_before, pid, deadline)? {
+            return Ok(());
+        }
+    }
+
     let children = strategy_read(
         crate::notifications::read::children(&entry.element, deadline),
         deadline,
@@ -184,8 +192,10 @@ fn try_dismiss_button(
         .flatten()
         .unwrap_or_default()
         .to_lowercase();
-        let is_dismiss =
-            name.contains("close") || name.contains("clear") || name.contains("dismiss");
+        let is_dismiss = name.contains("close")
+            || name.contains("clear")
+            || name.contains("dismiss")
+            || super::close_action::is_close_label(&name);
         if is_dismiss
             && strategy_succeeded(
                 crate::actions::ax_helpers::try_ax_action_or_err(child, "AXPress", deadline),
