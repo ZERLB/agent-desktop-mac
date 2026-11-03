@@ -32,7 +32,7 @@ Imprime cada paso con el método que funcionó, lo que se leyó después, cuánt
 
 ## Compilar e instalar
 
-Necesita Rust (la versión la fija `rust-toolchain.toml`) y las herramientas de línea de comandos de Xcode.
+Necesita Rust (la versión la fija `rust-toolchain.toml`) y las herramientas de línea de comandos de Xcode. La compilación ocupa unos 2 GB: si la copia vive en una carpeta que se respalda, compila fuera con `CARGO_TARGET_DIR` (por ejemplo `~/.cargo-target/agent-desktop`). Para una copia liviana sin las imágenes de la documentación: `git clone --filter=blob:none --no-checkout …` y `git sparse-checkout set --no-cone '/*' '!/assets/'`.
 
 ```sh
 sh zerlb/herramientas/compilar.sh                       # compila la CLI y el ayudante de macOS
