@@ -7,7 +7,9 @@
 # comando, si fue físico (--headed), si salió bien, el código de error, los
 # milisegundos, la app (la de --app o, en una acción por referencia, la de la lectura
 # de donde salió la referencia), los nombres de las opciones usadas, la forma de la
-# referencia (completa, corta o vaciada por zsh) y si fue una consulta de ayuda.
+# referencia (completa, corta o vaciada por zsh), si fue una consulta de ayuda, la vía
+# con que se entregó la acción (el nombre del primer paso, como AXPress o
+# PIDTargetedUnicodeText) y cómo quedó la entrega (delivered_verified, not_delivered…).
 # En los errores INVALID_ARGS guarda además el mensaje sin lo que iba entre comillas
 # ni números, para saber qué se escribió mal. Nunca guarda textos, referencias,
 # valores, capturas ni la salida del comando. Si el registro falla, la llamada no.
@@ -72,6 +74,9 @@ printf '%s\n' "$salida"
     if [ -z "$ok" ]; then
         [ "$rc" = 0 ] && ok=true || ok=false
     fi
+    metodo=$(printf '%s' "$salida" | grep -o '"steps":\[[^]]*' | head -1 \
+        | grep -o '"label":"[A-Za-z_ ]\{1,40\}"' | head -1 | cut -d'"' -f4)
+    entrega=$(printf '%s' "$salida" | grep -o '"delivery":"[a-z_]*"' | head -1 | cut -d'"' -f4)
     codigo=""
     detalle=""
     if [ "$ok" = "false" ]; then
@@ -83,10 +88,10 @@ printf '%s\n' "$salida"
     fi
     limpiar() { printf '%s' "$1" | tr -d '"\\\n\r' | cut -c1-80; }
     mkdir -p "$DIR"
-    printf '{"t":"%s","cmd":"%s","fisico":%s,"ok":%s,"codigo":"%s","ms":%s,"rc":%s,"app":"%s","opciones":"%s","ref":"%s","ayuda":%s,"detalle":"%s"}\n' \
+    printf '{"t":"%s","cmd":"%s","fisico":%s,"ok":%s,"codigo":"%s","ms":%s,"rc":%s,"app":"%s","opciones":"%s","ref":"%s","ayuda":%s,"detalle":"%s","metodo":"%s","entrega":"%s"}\n' \
         "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(limpiar "$cmd")" "$fisico" "$ok" "$codigo" \
         "$ms" "$rc" "$(limpiar "$app")" "$(limpiar "$opciones")" "$ref" "$ayuda" \
-        "$(limpiar "$detalle")" >> "$DIR/registro.jsonl"
+        "$(limpiar "$detalle")" "$(limpiar "$metodo")" "$entrega" >> "$DIR/registro.jsonl"
 } 2>/dev/null
 
 exit "$rc"

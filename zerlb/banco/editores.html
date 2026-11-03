@@ -24,13 +24,17 @@
 <label for="campo">Campo controlado</label>
 <input id="campo" type="text">
 
+<div class="etiqueta" id="et-chat">Chat</div>
+<div id="chat" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="et-chat"></div>
+
 <div id="estado" role="status" aria-live="polite"></div>
 
 <script>
-  const estado = { simple: '', controlado: '', campo: '' };
+  const estado = { simple: '', controlado: '', campo: '', chat: '', enviados: [] };
   function mostrar() {
     document.getElementById('estado').textContent =
-      'Simple: ' + estado.simple + '\nControlado: ' + estado.controlado + '\nCampo: ' + estado.campo;
+      'Simple: ' + estado.simple + '\nControlado: ' + estado.controlado + '\nCampo: ' + estado.campo +
+      '\nChat: ' + estado.chat + '\nEnviados: ' + estado.enviados.map((m) => '[' + m + ']').join(' ');
   }
 
   const simple = document.getElementById('simple');
@@ -68,6 +72,19 @@
   const campo = document.getElementById('campo');
   campo.addEventListener('input', () => { estado.campo = campo.value; mostrar(); });
   setInterval(() => { if (campo.value !== estado.campo) campo.value = estado.campo; }, 300);
+
+  // Como Slack, WhatsApp Web o ChatGPT: Enter envía el mensaje y Shift+Enter agrega una línea.
+  const chat = document.getElementById('chat');
+  chat.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      estado.enviados.push(chat.innerText.trim().replace(/\n+/g, '⏎'));
+      chat.textContent = '';
+      estado.chat = '';
+      mostrar();
+    }
+  });
+  chat.addEventListener('input', () => { estado.chat = chat.innerText.trim().replace(/\n+/g, '⏎'); mostrar(); });
 
   mostrar();
 </script>

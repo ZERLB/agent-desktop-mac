@@ -82,6 +82,16 @@ def resumir(filas, dias, md):
     if refs:
         fuera.append("Referencias mal escritas: " + ", ".join(f"{forma} ×{n}" for forma, n in refs.most_common())
                      + " (vaciada-por-zsh: se escribió \"@$VAR:eN\" sin llaves)")
+    vias = collections.defaultdict(collections.Counter)
+    for f in filas:
+        if f.get("metodo"):
+            clave = (f.get("cmd") or "?", f.get("app") or "sin app")
+            vias[clave][(f["metodo"], f.get("entrega") or "?")] += 1
+    if vias:
+        fuera.append("")
+        fuera.append("Vía de entrega por comando y app (vía · entrega ×veces):")
+        for (cmd, app), cuenta in sorted(vias.items(), key=lambda par: -sum(par[1].values()))[:10]:
+            fuera.append(f"- {cmd} en {app}: " + ", ".join(f"{m} · {e} ×{n}" for (m, e), n in cuenta.most_common(3)))
     argumentos = collections.Counter(
         (f.get("cmd") or "?", f.get("detalle") or "?", f.get("opciones") or "sin opciones")
         for f in malas if f.get("codigo") == "INVALID_ARGS" and "detalle" in f)

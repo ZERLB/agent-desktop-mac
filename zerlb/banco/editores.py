@@ -1,10 +1,12 @@
-"""Prueba de type en editores web: contenteditable simple, editor controlado y campo controlado.
+"""Prueba de type en editores web: contenteditable simple, editor controlado, campo controlado y chat.
 
 Uso: python3 -I editores.py "<App>" [--bin RUTA] [--texto "Hola, ¿qué tal? ñ 😀"]
 
 Abre antes editores.html en esa app (por ejemplo con el servidor de LEEME.md). Por cada
 campo dice si type salió bien, con qué método y cuánto tardó; al final lee lo que la página
-recibió de verdad, no sólo lo que se ve, y si la app al frente cambió.
+recibió de verdad, no sólo lo que se ve, y si la app al frente cambió. En el chat (Enter
+envía, Shift+Enter agrega una línea) escribe dos líneas, comprueba que no se envió nada y
+después lo envía con press --app.
 """
 import json
 import subprocess
@@ -83,8 +85,28 @@ def main():
     for campo, clave in zip(CAMPOS, ("Simple", "Controlado", "Campo")):
         bien = recibido.get(clave, "").endswith(TEXTO)
         print(f"  la página recibió en {campo:<18} {'sí' if bien else 'NO'}")
+    if "Chat" in refs:
+        sin_enviar, enviado = probar_chat(wid, refs["Chat"])
+        print(f"  chat: dos líneas sin enviar {'sí' if sin_enviar else 'NO'} · enviado con Return {'sí' if enviado else 'NO'}")
     print(f"  al frente: {antes} → {frente()}")
     return 0
+
+
+def lineas_de_estado(wid):
+    _, estado = leer(wid)
+    return dict(linea.split(": ", 1) for linea in (estado or "").splitlines() if ": " in linea)
+
+
+def probar_chat(wid, ref):
+    ad("type", ref, "línea uno\nlínea dos")
+    time.sleep(0.6)
+    lineas = lineas_de_estado(wid)
+    sin_enviar = lineas.get("Chat", "").endswith("línea uno⏎línea dos") and "línea dos" not in lineas.get("Enviados", "")
+    ad("press", "--app", APP, "return")
+    time.sleep(0.6)
+    lineas = lineas_de_estado(wid)
+    enviado = lineas.get("Enviados", "").endswith("[línea uno⏎línea dos]") and not lineas.get("Chat", "").strip()
+    return sin_enviar, enviado
 
 
 sys.exit(main())
