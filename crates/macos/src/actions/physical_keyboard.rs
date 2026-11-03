@@ -49,6 +49,61 @@ pub(crate) fn type_text(
     .map_err(|error| delivery.annotate(error))
 }
 
+/// Types `text` into a web text control by posting Unicode key events to its own
+/// process, the way headless `press --app` delivers keys: the application is not
+/// activated and the pointer does not move. Rich web editors (`contenteditable`, as in
+/// chat and document apps) and fields driven by page scripts apply only text that
+/// arrives as input events, which a semantic `AXValue` or `AXSelectedText` write never
+/// fires. Returns `Ok(false)`, with nothing sent, when the control does not hold its
+/// application's keyboard focus or the text cannot be sent within the deadline.
+pub(crate) fn type_text_into_focused_web_control(
+    element: &AXElement,
+    text: &str,
+    deadline: Deadline,
+) -> Result<bool, AdapterError> {
+    if crate::input::keyboard::preflight_text_by_unit(text, deadline).is_err() {
+        return Ok(false);
+    }
+    let Some(pid) =
+        crate::system::app::app_ops::pid_from_element(element, deadline).filter(|pid| *pid > 0)
+    else {
+        return Ok(false);
+    };
+    let Some(identity) = crate::system::process::process_identity::ProcessIdentity::capture(pid)?
+    else {
+        return Ok(false);
+    };
+    if wait_for_focused_element(element, pid, deadline).is_err() {
+        return Ok(false);
+    }
+    crate::input::keyboard::synthesize_text_by_unit(text, pid, deadline, |deadline| {
+        verify_background_delivery_target(element, identity, deadline)
+    })?;
+    Ok(true)
+}
+
+fn verify_background_delivery_target(
+    expected: &AXElement,
+    identity: crate::system::process::process_identity::ProcessIdentity,
+    deadline: Deadline,
+) -> Result<(), AdapterError> {
+    if !identity.still_matches()? {
+        return Err(AdapterError::new(
+            ErrorCode::StaleRef,
+            "Keyboard target process instance changed before PID-targeted text delivery",
+        )
+        .with_disposition(agent_desktop_core::DeliverySemantics::not_delivered()));
+    }
+    if focused_element_matches(expected, identity.pid(), deadline)? {
+        return Ok(());
+    }
+    Err(AdapterError::new(
+        ErrorCode::ActionFailed,
+        "Target element lost focus before PID-targeted text delivery",
+    )
+    .with_disposition(agent_desktop_core::DeliverySemantics::not_delivered()))
+}
+
 fn prepare_target(
     element: &AXElement,
     policy: InteractionPolicy,

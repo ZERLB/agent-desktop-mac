@@ -6,13 +6,15 @@ use agent_desktop_core::{
 use crate::tree::AXElement;
 
 /// Types `text` into a text control. Headless, the text is inserted at the selection
-/// through `AXSelectedText`. Two controls need the same text spliced in through `AXValue`
-/// instead: a web field, which Safari and Chromium accept the insertion on and then drop
-/// (it is focused first, inside its own application), and a single-line native field such
-/// as a search field, which drops an `AXSelectedText` write until it holds keyboard focus.
-/// An unfocused single-line field has no caret, so its text is spliced at once; a focused
-/// one keeps the caret insertion. Multi-line text is never rewritten through `AXValue`,
-/// which would drop its formatting.
+/// through `AXSelectedText`. A web field is focused inside its own application and, once
+/// it holds that application's keyboard focus, receives the text as key events posted to
+/// its process, because rich web editors and script-driven fields ignore semantic writes.
+/// Two controls need the text spliced in through `AXValue` instead: a web field that does
+/// not take focus, which Safari and Chromium accept the insertion on and then drop, and a
+/// single-line native field such as a search field, which drops an `AXSelectedText` write
+/// until it holds keyboard focus. An unfocused single-line field has no caret, so its text
+/// is spliced at once; a focused one keeps the caret insertion. Multi-line text is never
+/// rewritten through `AXValue`, which would drop its formatting.
 pub(crate) fn execute_type(
     element: &AXElement,
     text: &str,
@@ -32,6 +34,15 @@ pub(crate) fn execute_type(
             .with_verified(false));
     }
     let web = crate::tree::web_content::focus_web_text_control(element, deadline);
+    if web
+        && crate::actions::physical_keyboard::type_text_into_focused_web_control(
+            element, text, deadline,
+        )?
+    {
+        return Ok(ActionStep::succeeded("PIDTargetedUnicodeText")
+            .with_mechanism(StepMechanism::PhysicalSynthetic)
+            .with_verified(false));
+    }
     let (before, selection) = value_and_selection(element, deadline);
     let unfocused_single_line = !web
         && is_single_line(&role)

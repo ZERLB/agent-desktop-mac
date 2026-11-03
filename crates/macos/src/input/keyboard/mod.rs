@@ -60,6 +60,33 @@ pub(crate) fn preflight_text(text: &str, deadline: Deadline) -> Result<(), Adapt
     crate::input::keyboard::keyboard_event::preflight_text(text, deadline)
 }
 
+/// Unicode text as one key event per UTF-16 code unit, which a Chromium page in a
+/// background application applies; see `keyboard_event::post_text_by_unit`.
+#[cfg(target_os = "macos")]
+pub(crate) fn synthesize_text_by_unit(
+    text: &str,
+    target_pid: i32,
+    deadline: Deadline,
+    verify_target: impl FnMut(Deadline) -> Result<(), AdapterError>,
+) -> Result<(), AdapterError> {
+    tracing::debug!(
+        characters = text.chars().count(),
+        target_pid,
+        "keyboard: synthesize Unicode text one code unit per event"
+    );
+    crate::input::keyboard::keyboard_event::post_text_by_unit(
+        text,
+        target_pid,
+        deadline,
+        verify_target,
+    )
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn preflight_text_by_unit(text: &str, deadline: Deadline) -> Result<(), AdapterError> {
+    crate::input::keyboard::keyboard_event::preflight_text_by_unit(text, deadline)
+}
+
 #[cfg(not(target_os = "macos"))]
 pub(crate) fn synthesize_key(
     _combo: &KeyCombo,

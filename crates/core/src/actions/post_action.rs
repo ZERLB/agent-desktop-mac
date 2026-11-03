@@ -162,7 +162,9 @@ fn mismatch_error(action: &Action) -> AdapterError {
     if matches!(action, Action::TypeText(_)) {
         return error.with_suggestion(
             "Some fields, often in Chromium and Electron apps, accept typed text without applying it. \
-             Read the field with 'get', then write the full intended value with 'set-value'.",
+             Read the field with 'get'. A plain field takes the full intended value with 'set-value'; \
+             a rich editor (chat box, document body) applies only key events: click it, then retry \
+             'type', or use 'type --headed'.",
         );
     }
     error

@@ -5,6 +5,7 @@ use std::time::Duration;
 
 const KEY_SETTLE: Duration = Duration::from_millis(4);
 const TEXT_CHUNK_BUDGET: Duration = Duration::from_millis(400);
+const TEXT_UNIT_BUDGET: Duration = Duration::from_millis(25);
 const MAX_TEXT_UTF16: usize = 1_000_000;
 const TEXT_CHUNK_UTF16: usize = 32;
 
@@ -29,10 +30,31 @@ pub(crate) fn post_text(
     text: &str,
     target_pid: i32,
     deadline: Deadline,
-    mut verify_target: impl FnMut(Deadline) -> Result<(), AdapterError>,
+    verify_target: impl FnMut(Deadline) -> Result<(), AdapterError>,
 ) -> Result<(), AdapterError> {
     preflight_text(text, deadline)?;
-    let chunks = text_chunks(text)?;
+    post_chunks(text_chunks(text)?, target_pid, deadline, verify_target)
+}
+
+/// Posts `text` one UTF-16 code unit per key event. Chromium applies a Unicode key event
+/// to a page in a background application only when it carries a single code unit; it
+/// drops longer strings, including both halves of a surrogate pair sent together.
+pub(crate) fn post_text_by_unit(
+    text: &str,
+    target_pid: i32,
+    deadline: Deadline,
+    verify_target: impl FnMut(Deadline) -> Result<(), AdapterError>,
+) -> Result<(), AdapterError> {
+    preflight_text_by_unit(text, deadline)?;
+    post_chunks(text_units(text)?, target_pid, deadline, verify_target)
+}
+
+fn post_chunks(
+    chunks: Vec<Vec<u16>>,
+    target_pid: i32,
+    deadline: Deadline,
+    mut verify_target: impl FnMut(Deadline) -> Result<(), AdapterError>,
+) -> Result<(), AdapterError> {
     let total = chunks.len();
     let mut delivery = crate::actions::DeliveryTracker::default();
     for chunk in chunks {
@@ -55,10 +77,21 @@ pub(crate) fn post_text(
 }
 
 pub(crate) fn preflight_text(text: &str, deadline: Deadline) -> Result<(), AdapterError> {
-    let chunks = planned_chunk_count(text)?;
+    preflight_plan(planned_chunk_count(text)?, TEXT_CHUNK_BUDGET, deadline)
+}
+
+pub(crate) fn preflight_text_by_unit(text: &str, deadline: Deadline) -> Result<(), AdapterError> {
+    preflight_plan(planned_unit_count(text)?, TEXT_UNIT_BUDGET, deadline)
+}
+
+fn preflight_plan(
+    chunks: usize,
+    budget_per_chunk: Duration,
+    deadline: Deadline,
+) -> Result<(), AdapterError> {
     let multiplier = u32::try_from(chunks)
         .map_err(|_| AdapterError::new(ErrorCode::InvalidArgs, "Text payload is too large"))?;
-    let required = TEXT_CHUNK_BUDGET
+    let required = budget_per_chunk
         .checked_mul(multiplier)
         .ok_or_else(|| AdapterError::new(ErrorCode::InvalidArgs, "Text payload is too large"))?;
     let remaining = deadline.remaining();
@@ -190,6 +223,19 @@ fn text_chunks(text: &str) -> Result<Vec<Vec<u16>>, AdapterError> {
     Ok(chunks)
 }
 
+fn text_units(text: &str) -> Result<Vec<Vec<u16>>, AdapterError> {
+    let _ = planned_unit_count(text)?;
+    Ok(text.encode_utf16().map(|unit| vec![unit]).collect())
+}
+
+fn planned_unit_count(text: &str) -> Result<usize, AdapterError> {
+    let units = text.encode_utf16().count();
+    if units > MAX_TEXT_UTF16 {
+        return Err(text_too_large());
+    }
+    Ok(units)
+}
+
 fn planned_chunk_count(text: &str) -> Result<usize, AdapterError> {
     let mut units = 0_usize;
     let mut chunks = 0_usize;
@@ -228,6 +274,25 @@ mod tests {
 
         assert_eq!(roundtrip, text);
         assert!(chunks.iter().all(|chunk| chunk.len() <= TEXT_CHUNK_UTF16));
+    }
+
+    #[test]
+    fn text_units_send_each_code_unit_alone_and_roundtrip() {
+        let text = "ñé¿😀 a";
+        let units = text_units(text).unwrap();
+        let roundtrip = String::from_utf16(&units.concat()).unwrap();
+
+        assert_eq!(roundtrip, text);
+        assert_eq!(units.len(), text.encode_utf16().count());
+        assert!(units.iter().all(|unit| unit.len() == 1));
+    }
+
+    #[test]
+    fn unit_delivery_fits_the_default_type_timeout() {
+        let text = "x".repeat(200);
+        let default_type_timeout = Deadline::after(5_000 + 30 * 200).unwrap();
+
+        assert!(preflight_text_by_unit(&text, default_type_timeout).is_ok());
     }
 
     #[test]
