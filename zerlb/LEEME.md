@@ -17,8 +17,12 @@ Cada arreglo salió de una prueba real en una Mac con macOS 26 en español, y ti
 | `minimize` y `restore` | Respondían `TIMEOUT` aunque la ventana sí se minimizaba, porque leían el estado en plena animación | La lectura «ocupado» se repite hasta el límite de tiempo |
 | `select` en una página web | En Chrome, Edge y Electron abría el menú del clic derecho, esperaba 5 s y lo dejaba abierto | En páginas web, la lista se pone a la vista y se abre con un clic; un menú que quede abierto se cierra |
 | `type` y `set-value` en una página web | Safari y Chrome aceptaban el texto y lo borraban; el campo quedaba vacío | El campo se enfoca dentro de su app (sin pasarla al frente) y, si hace falta, el texto se mete en la posición del cursor |
+| `--app` con el nombre en inglés | En una Mac en español, `--app Calculator` respondía `APP_NOT_FOUND` porque la app se llama «Calculadora» | También se acepta el nombre del paquete (`Calculator.app`), igual en todos los idiomas: «Calculator», «Notes», «System Settings» |
+| Botones de las notificaciones | La lista no mostraba ninguna acción y `notification-action` no encontraba «Responder» ni «Archivar», que en macOS 26 son acciones internas | La lista muestra las acciones internas (menos las de cerrar) y `notification-action` las ejecuta |
+| `type` en buscadores nativos | En Ajustes o Mensajes, `type` respondía `POLICY_DENIED`, o aceptaba el texto y lo descartaba si el campo no tenía el foco | En un campo de una sola línea sin foco, el texto se agrega al final del valor; con foco se sigue escribiendo en el cursor. Nunca en áreas de texto de varias líneas, para no perder su formato |
+| Búsquedas con acentos | `find --name "Sin título"` no encontraba el título de TextEdit (macOS lo entrega con el acento separado), y «Bateria» no encontraba «Batería» | Las búsquedas comparan sin acentos y aceptan las dos formas de escribirlos |
 
-Archivos cambiados respecto del original: `crates/macos/src/notifications/{nc_session.rs,actions.rs,mod.rs,close_action.rs}`, `crates/macos/src/system/window/window_postcondition.rs`, `crates/macos/src/tree/{web_content.rs,mod.rs}`, `crates/macos/src/actions/select/select_menu.rs`, `crates/macos/src/actions/chain/chain_value_write.rs` y `crates/macos/src/actions/type_text.rs`. El aviso de cambios que pide la licencia Apache-2.0 es esta lista y el historial de Git.
+Archivos cambiados respecto del original: `crates/macos/src/notifications/{nc_session.rs,actions.rs,mod.rs,scan.rs,custom_actions.rs}`, `crates/macos/src/system/window/window_postcondition.rs`, `crates/macos/src/system/app/{workspace_apps.rs,workspace_apps_identity.rs}`, `crates/macos/src/system/appkit_bridge.m`, `crates/macos/src/tree/{web_content.rs,mod.rs,adapter.rs}`, `crates/macos/src/tree/properties/action_list.rs`, `crates/macos/src/actions/select/select_menu.rs`, `crates/macos/src/actions/chain/chain_value_write.rs`, `crates/macos/src/actions/type_text.rs` y `crates/core/src/tree/{search_text.rs,search_text_tests.rs}`. El aviso de cambios que pide la licencia Apache-2.0 es esta lista y el historial de Git.
 
 ## Banco de pruebas web
 
@@ -31,6 +35,20 @@ python3 zerlb/banco/recorrido.py Safari --bin target/release/agent-desktop
 ```
 
 Imprime cada paso con el método que funcionó, lo que se leyó después, cuánto tardó, y si el puntero o la app al frente cambiaron. Resultado con esta copia (2-nov-2026, macOS 26, sin modo físico): 12 de 12 pasos en Safari, Microsoft Edge y Chrome for Testing, con el puntero quieto; en Chrome for Testing también con la ventana en segundo plano. Con el original 1.0.2, en el mismo banco: 11 de 12 en Chrome for Testing (falla la lista) y 8 de 12 en Safari (fallan la lista y los tres campos de texto).
+
+## Apps probadas
+
+Prueba del 2-nov-2026 en macOS 26 en español, con la app abierta en segundo plano: leer la ventana, los menús y una captura, y escribir en el buscador cuando no cambia nada. Las apps se leen sin pasarlas al frente.
+
+| Resultado | Apps |
+| --- | --- |
+| Se leen bien y se manejan sin pantalla | Finder, Ajustes, Calculadora, Teléfono, FaceTime, Mensajes, Mail, Notas, Recordatorios, Calendario, Fotos, Vista Previa, QuickTime, Monitor de Actividad, App Store, TextEdit, Safari, Google Chrome, Microsoft Edge, Word, Excel, Obsidian, Claude, ChatGPT, Canva, una app web de Safari, un cliente de bases de datos hecho en Java y un descompresor |
+| Necesitan unos segundos después de abrirse | ChatGPT, Canva y las apps web: al principio sólo muestran el marco de la ventana (3 a 10 elementos) y a los 10 s muestran su contenido. Esperar con `snapshot --wait-for` o volver a leer |
+| Se leen, pero escribir pide el modo físico | WhatsApp: sus campos no aceptan texto ni muestran su valor por accesibilidad; hace falta `--headed type` con la app al frente |
+| No exponen su contenido | Spotify (ni macOS ve sus botones; se controla con AppleScript: `tell application "Spotify" to playpause`) y Warp (expone sólo el marco) |
+| Sin ventana | Apps que viven sólo en la barra de menú (VPN, utilidades): `snapshot` responde `WINDOW_NOT_FOUND`; leer sus íconos de la barra (`menu-bar-extras`) todavía no existe en macOS |
+
+Paneles de Guardar y Abrir (TextEdit, macOS 26): Guardar funciona sin pantalla (nombre con `set-value` y el botón Guardar). En el panel de Abrir la lista de archivos de iCloud se redibuja todo el tiempo y el archivo elegido queda `STALE_REF`; para abrir un archivo es mejor `open -a App archivo`. Los atajos de teclado van con `press --app App`, que los manda a esa app sin pasarla al frente; un `press` sin `--app` va a la app que esté al frente.
 
 ## Compilar e instalar
 
@@ -61,6 +79,14 @@ sh zerlb/herramientas/novedades.sh
 ```
 
 Consulta `vercel-labs/agent-desktop` y dice cuántos commits nuevos tiene el original, cuál es su último lanzamiento y qué versión está instalada. Para juntarlos: `git merge upstream/main` (sin reescribir historia), compilar, correr las pruebas y el banco web, y subir.
+
+## Probar todas las apps
+
+`zerlb/banco/apps.py` repite esa prueba con una lista de apps (una ruta por renglón en un archivo de texto) y deja un renglón JSON por app. No lee contenido: sólo cuenta elementos y anota si cada paso funcionó.
+
+```sh
+python3 zerlb/banco/apps.py lista-de-apps.txt resultados.jsonl
+```
 
 ## Licencia
 
