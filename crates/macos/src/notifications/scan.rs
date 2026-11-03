@@ -129,6 +129,14 @@ fn extract_notification(
             _ => {}
         }
     }
+    for label in super::custom_actions::pressable_labels(element, deadline) {
+        if !actions
+            .iter()
+            .any(|known: &String| known.eq_ignore_ascii_case(&label))
+        {
+            actions.push(label);
+        }
+    }
     let Some((app_name, title, body)) = description
         .as_deref()
         .and_then(|value| parse_row_description(value, &text_values))

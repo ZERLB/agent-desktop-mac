@@ -122,7 +122,7 @@ fn dismiss_entry(
         }
     }
 
-    if let Some(close) = super::close_action::custom_close_action(&entry.element, deadline) {
+    if let Some(close) = super::custom_actions::custom_close_action(&entry.element, deadline) {
         let outcome =
             crate::actions::ax_helpers::try_ax_action_or_err(&entry.element, &close, deadline);
         if strategy_verified(outcome, entry, filter, matching_before, pid, deadline)? {
@@ -195,7 +195,7 @@ fn try_dismiss_button(
         let is_dismiss = name.contains("close")
             || name.contains("clear")
             || name.contains("dismiss")
-            || super::close_action::is_close_label(&name);
+            || super::custom_actions::is_close_label(&name);
         if is_dismiss
             && strategy_succeeded(
                 crate::actions::ax_helpers::try_ax_action_or_err(child, "AXPress", deadline),
@@ -245,15 +245,9 @@ fn action_impl(
             break;
         }
     }
-    let btn = action_btn.ok_or_else(|| {
-        AdapterError::new(
-            ErrorCode::ActionFailed,
-            format!(
-                "Action '{}' not found on notification {}",
-                action_name, index
-            ),
-        )
-    })?;
+    let Some(btn) = action_btn else {
+        return super::custom_actions::perform_named(&entry.element, action_name, index, deadline);
+    };
 
     if !crate::actions::ax_helpers::try_ax_action_or_err(btn, "AXPress", deadline)? {
         return Err(AdapterError::new(
