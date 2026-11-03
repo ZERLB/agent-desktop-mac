@@ -1,6 +1,8 @@
-# agent-desktop · copia de ZERLB
+# agent-desktop para Mac · copia de ZERLB
 
-Esta es una copia de [vercel-labs/agent-desktop](https://github.com/vercel-labs/agent-desktop), la herramienta que deja que un agente de IA lea y maneje las apps de escritorio por la accesibilidad del sistema. La mantenemos para arreglar lo que falla en el uso real (sobre todo macOS en español, macOS 26 y páginas web) y para recibir cada versión nueva del original.
+Esta es la versión **para Mac** de [vercel-labs/agent-desktop](https://github.com/vercel-labs/agent-desktop), la herramienta que deja que un agente de IA lea y maneje las apps de escritorio por la accesibilidad del sistema. La mantenemos para arreglar lo que falla en el uso real (sobre todo macOS en español, macOS 26 y páginas web) y para recibir cada versión nueva del original.
+
+Se compila, se prueba y se usa en macOS (Apple Silicon). El código de Windows y Linux del original se conserva sin cambios, sólo para poder juntar cada versión nueva de Vercel sin conflictos; esta copia no lo prueba ni lo da por bueno.
 
 Todo lo demás es igual que en el original: mismos comandos, mismo JSON, misma licencia (Apache-2.0). Lo propio de esta copia vive en esta carpeta `zerlb/` y en los commits que se listan abajo.
 

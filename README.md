@@ -1,6 +1,6 @@
 # agent-desktop
 
-> **Copia de ZERLB.** Esta copia de [vercel-labs/agent-desktop](https://github.com/vercel-labs/agent-desktop) agrega arreglos para macOS en español, macOS 26 y páginas web (Safari, Chrome, Edge), un banco de pruebas y la medición del uso. Qué cambia y cómo se usa: [zerlb/LEEME.md](zerlb/LEEME.md). This fork adds macOS fixes for non-English systems, macOS 26 and web content; see [zerlb/LEEME.md](zerlb/LEEME.md).
+> **agent-desktop para Mac (ZERLB).** Esta copia de [vercel-labs/agent-desktop](https://github.com/vercel-labs/agent-desktop) está hecha y probada para macOS: arreglos para macOS en español, macOS 26 y páginas web (Safari, Chrome, Edge), pruebas con las apps de uso diario, un banco de pruebas y la medición del uso. Qué cambia y cómo se usa: [zerlb/LEEME.md](zerlb/LEEME.md). This is a macOS-focused fork with fixes for non-English systems, macOS 26 and web content; see [zerlb/LEEME.md](zerlb/LEEME.md).
 
 Computer use for AI agents: read and operate desktop apps through the OS accessibility tree.
 
