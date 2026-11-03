@@ -43,8 +43,10 @@ def resumir(filas, dias, md):
     fuera = []
     titulo = f"Uso de agent-desktop · últimos {dias} días"
     fuera.append(f"## {titulo}" if md else titulo)
+    ayudas = sum(1 for f in filas if f.get("ayuda"))
+    filas = [f for f in filas if not f.get("ayuda")]
     if not filas:
-        fuera.append("Sin llamadas registradas en ese periodo.")
+        fuera.append("Sin llamadas registradas en ese periodo." + (f" Consultas de ayuda: {ayudas}." if ayudas else ""))
         return "\n".join(fuera)
     total = len(filas)
     malas = [f for f in filas if not f.get("ok")]
@@ -52,6 +54,7 @@ def resumir(filas, dias, md):
     fuera.append(
         f"Llamadas: {total} · con error: {len(malas)} ({100 * len(malas) // total} %) · "
         f"modo físico: {fisicas} · de {filas[0]['t'][:10]} a {filas[-1]['t'][:10]}"
+        + (f" · consultas de ayuda aparte: {ayudas}" if ayudas else "")
     )
     por_cmd = collections.defaultdict(list)
     for fila in filas:
@@ -75,6 +78,18 @@ def resumir(filas, dias, md):
     if malas:
         codigos = collections.Counter(f.get("codigo") or "?" for f in malas)
         fuera.append("Errores en total: " + ", ".join(f"{c} ×{n}" for c, n in codigos.most_common()))
+    refs = collections.Counter(f.get("ref") for f in filas if f.get("ref") and f.get("ref") != "completa")
+    if refs:
+        fuera.append("Referencias mal escritas: " + ", ".join(f"{forma} ×{n}" for forma, n in refs.most_common())
+                     + " (vaciada-por-zsh: se escribió \"@$VAR:eN\" sin llaves)")
+    argumentos = collections.Counter(
+        (f.get("cmd") or "?", f.get("detalle") or "?", f.get("opciones") or "sin opciones")
+        for f in malas if f.get("codigo") == "INVALID_ARGS" and "detalle" in f)
+    if argumentos:
+        fuera.append("")
+        fuera.append("Argumentos rechazados (comando · mensaje · opciones usadas):")
+        for (cmd, detalle, opciones), n in argumentos.most_common(8):
+            fuera.append(f"- {cmd} · {detalle} · {opciones} ×{n}")
     return "\n".join(fuera)
 
 

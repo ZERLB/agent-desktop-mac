@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Editores agent-desktop</title>
+<style>
+  body { font: 16px -apple-system, system-ui, sans-serif; margin: 24px; max-width: 640px; }
+  label, .etiqueta { display: block; margin: 14px 0 4px; }
+  input[type=text] { width: 100%; padding: 6px; font: inherit; }
+  [contenteditable] { min-height: 2.4em; padding: 6px; border: 1px solid #999; border-radius: 4px; }
+  #estado { margin-top: 16px; padding: 10px; background: #eef; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>Editores</h1>
+<p>Campos como los de los chats y documentos web. Cada uno anota abajo lo que la página recibió, no sólo lo que se ve.</p>
+
+<div class="etiqueta" id="et-simple">Editor simple</div>
+<div id="simple" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="et-simple"></div>
+
+<div class="etiqueta" id="et-controlado">Editor controlado</div>
+<div id="controlado" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="et-controlado"></div>
+
+<label for="campo">Campo controlado</label>
+<input id="campo" type="text">
+
+<div id="estado" role="status" aria-live="polite"></div>
+
+<script>
+  const estado = { simple: '', controlado: '', campo: '' };
+  function mostrar() {
+    document.getElementById('estado').textContent =
+      'Simple: ' + estado.simple + '\nControlado: ' + estado.controlado + '\nCampo: ' + estado.campo;
+  }
+
+  const simple = document.getElementById('simple');
+  simple.addEventListener('input', () => { estado.simple = simple.innerText.trim(); mostrar(); });
+
+  // Como Lexical, ProseMirror o Draft.js: el texto vive en un modelo propio, cada cambio
+  // llega por beforeinput y la página vuelve a dibujar el editor desde el modelo. Lo que
+  // cambie el DOM sin pasar por beforeinput se descarta en el siguiente dibujo.
+  const controlado = document.getElementById('controlado');
+  function dibujar() {
+    controlado.textContent = estado.controlado;
+    const sel = getSelection();
+    if (document.activeElement === controlado && controlado.firstChild) {
+      sel.collapse(controlado.firstChild, estado.controlado.length);
+    }
+    mostrar();
+  }
+  controlado.addEventListener('beforeinput', (e) => {
+    e.preventDefault();
+    const tipo = e.inputType;
+    if (tipo === 'insertText' || tipo === 'insertReplacementText' || tipo === 'insertFromPaste' || tipo === 'insertCompositionText') {
+      const texto = e.data ?? (e.dataTransfer && e.dataTransfer.getData('text/plain')) ?? '';
+      estado.controlado += texto;
+    } else if (tipo === 'deleteContentBackward') {
+      estado.controlado = estado.controlado.slice(0, -1);
+    } else if (tipo === 'insertParagraph' || tipo === 'insertLineBreak') {
+      estado.controlado += '\n';
+    }
+    dibujar();
+  });
+  controlado.addEventListener('input', dibujar);
+  setInterval(() => { if (controlado.textContent !== estado.controlado) dibujar(); }, 300);
+
+  // Como un campo de React: el valor sale del estado y sólo cambia con el evento input.
+  const campo = document.getElementById('campo');
+  campo.addEventListener('input', () => { estado.campo = campo.value; mostrar(); });
+  setInterval(() => { if (campo.value !== estado.campo) campo.value = estado.campo; }, 300);
+
+  mostrar();
+</script>
+</body>
+</html>

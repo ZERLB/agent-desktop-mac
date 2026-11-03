@@ -5,7 +5,11 @@
 # binario real con AGENT_DESKTOP_REAL. Por cada llamada agrega una línea a
 # $AGENT_DESKTOP_USO/registro.jsonl (por omisión ~/.agent-desktop-uso) con: fecha,
 # comando, si fue físico (--headed), si salió bien, el código de error, los
-# milisegundos y el nombre de la app de --app. Nunca guarda textos, referencias,
+# milisegundos, la app (la de --app o, en una acción por referencia, la de la lectura
+# de donde salió la referencia), los nombres de las opciones usadas, la forma de la
+# referencia (completa, corta o vaciada por zsh) y si fue una consulta de ayuda.
+# En los errores INVALID_ARGS guarda además el mensaje sin lo que iba entre comillas
+# ni números, para saber qué se escribió mal. Nunca guarda textos, referencias,
 # valores, capturas ni la salida del comando. Si el registro falla, la llamada no.
 
 REAL="${AGENT_DESKTOP_REAL:?Define AGENT_DESKTOP_REAL con la ruta del binario real de agent-desktop}"
@@ -21,32 +25,68 @@ printf '%s\n' "$salida"
     printf -v ms '%.0f' $(( (EPOCHREALTIME - inicio) * 1000 ))
     cmd=""
     fisico=false
+    ayuda=false
     app=""
     previo=""
+    opciones=""
+    ref=""
+    lectura=""
     for arg in "$@"; do
-        case "$arg" in --headed) fisico=true ;; esac
+        case "$arg" in
+            --headed) fisico=true ;;
+            -h | --help) ayuda=true ;;
+            --app=*) app="${arg#--app=}" ;;
+        esac
         [ "$previo" = "--app" ] && app="$arg"
+        nombre="${arg%%=*}"
+        if [[ "$nombre" =~ '^--?[A-Za-z][A-Za-z0-9-]*$' && ",$opciones," != *",$nombre,"* ]]; then
+            opciones="${opciones:+$opciones,}$nombre"
+        fi
         if [ -z "$cmd" ]; then
             case "$previo" in
                 --session | --agent-id | --trace | --screenshot | --app | --window-id) ;;
                 *) case "$arg" in -*) ;; *) cmd="$arg" ;; esac ;;
             esac
+        elif [[ "$arg" =~ '^@[a-z0-9]+:e[0-9]+$' ]]; then
+            ref="${ref:-completa}"
+            lectura="${lectura:-${${arg#@}%%:*}}"
+        elif [[ "$arg" =~ '^@?e[0-9]+$' ]]; then
+            ref="corta"
+        elif [[ "$arg" =~ '^@[0-9]+$' ]]; then
+            ref="vaciada-por-zsh"
         fi
         previo="$arg"
     done
+    [ "$cmd" = "help" ] && ayuda=true
+    if [ -z "$app" ] && [ -n "$lectura" ]; then
+        raiz="${AGENT_DESKTOP_HOME:-$HOME/.agent-desktop}"
+        mapa=""
+        for candidato in "$raiz/snapshots/$lectura/refmap.json" "$raiz"/sessions/*/snapshots/"$lectura"/refmap.json(N); do
+            [ -f "$candidato" ] && mapa="$candidato" && break
+        done
+        [ -n "$mapa" ] && app=$(grep -o -m1 '"source_app":"[^"]*"' "$mapa" | head -1 | cut -d'"' -f4)
+    fi
     # El sobre JSON lleva "ok" al principio (versión 2.6) o al final (2.5).
     ok=$( { printf '%s' "$salida" | head -c 300; printf '%s' "$salida" | tail -c 300; } \
         | grep -o '"ok":\(true\|false\)' | head -1 | cut -d: -f2)
-    [ -z "$ok" ] && ok=false
+    if [ -z "$ok" ]; then
+        [ "$rc" = 0 ] && ok=true || ok=false
+    fi
     codigo=""
+    detalle=""
     if [ "$ok" = "false" ]; then
         codigo=$(printf '%s' "$salida" | grep -o '"code":"[A-Z_]*"' | head -1 | cut -d'"' -f4)
+        if [ "$codigo" = "INVALID_ARGS" ]; then
+            detalle=$(printf '%s' "$salida" | grep -o '"message":"[^"]*"' | head -1 | cut -d'"' -f4 \
+                | sed -E "s/'[^']*'/'_'/g" | tr -cd "A-Za-z_<>:@' .,()-" | cut -c1-100)
+        fi
     fi
     limpiar() { printf '%s' "$1" | tr -d '"\\\n\r' | cut -c1-80; }
     mkdir -p "$DIR"
-    printf '{"t":"%s","cmd":"%s","fisico":%s,"ok":%s,"codigo":"%s","ms":%s,"rc":%s,"app":"%s"}\n' \
+    printf '{"t":"%s","cmd":"%s","fisico":%s,"ok":%s,"codigo":"%s","ms":%s,"rc":%s,"app":"%s","opciones":"%s","ref":"%s","ayuda":%s,"detalle":"%s"}\n' \
         "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(limpiar "$cmd")" "$fisico" "$ok" "$codigo" \
-        "$ms" "$rc" "$(limpiar "$app")" >> "$DIR/registro.jsonl"
+        "$ms" "$rc" "$(limpiar "$app")" "$(limpiar "$opciones")" "$ref" "$ayuda" \
+        "$(limpiar "$detalle")" >> "$DIR/registro.jsonl"
 } 2>/dev/null
 
 exit "$rc"
