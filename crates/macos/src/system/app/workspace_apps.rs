@@ -19,6 +19,8 @@ struct BridgedApplication {
     pid: i32,
     #[serde(default)]
     bundle_id: Option<String>,
+    #[serde(default)]
+    bundle_name: Option<String>,
     launch_time: NullableLaunchTime,
     activation_policy: ActivationPolicy,
 }
@@ -51,6 +53,7 @@ pub(crate) struct WindowOwner {
     pub(crate) pid: i32,
     pub(crate) name: String,
     pub(crate) bundle_id: Option<String>,
+    pub(crate) bundle_name: Option<String>,
     pub(crate) launch_time: Option<f64>,
     pub(crate) activation_policy: ActivationPolicy,
 }
@@ -71,11 +74,12 @@ impl WindowOwnerSnapshot {
         self.owners
             .iter()
             .filter(|owner| {
-                agent_desktop_core::app_name_matches(&owner.name, identifier)
-                    || owner
-                        .bundle_id
-                        .as_deref()
-                        .is_some_and(|bundle_id| bundle_id.eq_ignore_ascii_case(identifier))
+                app_identity::identifies(
+                    &owner.name,
+                    owner.bundle_id.as_deref(),
+                    owner.bundle_name.as_deref(),
+                    identifier,
+                )
             })
             .map(|owner| owner.pid)
             .collect()
@@ -130,10 +134,12 @@ pub(crate) fn list_apps_scoped_until(
         |app| {
             (agent_desktop_core::app_name_matches(&app.name, name)
                 || (bundle_id.is_none()
-                    && app
-                        .bundle_id
-                        .as_deref()
-                        .is_some_and(|candidate| candidate.eq_ignore_ascii_case(name))))
+                    && app_identity::identifies(
+                        &app.name,
+                        app.bundle_id.as_deref(),
+                        app.bundle_name.as_deref(),
+                        name,
+                    )))
                 && bundle_id.is_none_or(|bundle| {
                     app.bundle_id
                         .as_deref()
@@ -276,6 +282,7 @@ fn window_owner_snapshot_from_json(
             pid: app.pid,
             name: app.name,
             bundle_id: app.bundle_id,
+            bundle_name: app.bundle_name,
             launch_time,
             activation_policy: app.activation_policy,
         });
@@ -374,6 +381,9 @@ mod tests;
 
 #[path = "workspace_apps_records.rs"]
 mod records;
+
+#[path = "workspace_apps_identity.rs"]
+mod app_identity;
 use records::bridged_snapshot;
 
 #[cfg(test)]
