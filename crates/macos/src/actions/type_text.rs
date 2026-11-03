@@ -40,7 +40,11 @@ pub(crate) fn execute_type(
     let append = web_caret == Some(false);
     if web
         && crate::actions::physical_keyboard::type_text_into_focused_web_control(
-            element, text, append, deadline,
+            element,
+            text,
+            append,
+            !is_single_line(&role),
+            deadline,
         )?
     {
         return Ok(ActionStep::succeeded("PIDTargetedUnicodeText")

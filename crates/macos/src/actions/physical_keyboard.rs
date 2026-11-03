@@ -57,13 +57,16 @@ pub(crate) fn type_text(
 /// activated and the pointer does not move. Rich web editors (`contenteditable`, as in
 /// chat and document apps) and fields driven by page scripts apply only text that
 /// arrives as input events, which a semantic `AXValue` or `AXSelectedText` write never
-/// fires. With `append`, the caret moves to the end once the control holds focus.
+/// fires. With `append`, the caret moves to the end once the control holds focus; in a
+/// `multiline` control each line break goes as Shift+Return, which adds a line in a chat
+/// box instead of sending it.
 /// Returns `Ok(false)`, with nothing sent, when the control does not hold its
 /// application's keyboard focus or the text cannot be sent within the deadline.
 pub(crate) fn type_text_into_focused_web_control(
     element: &AXElement,
     text: &str,
     append: bool,
+    multiline: bool,
     deadline: Deadline,
 ) -> Result<bool, AdapterError> {
     if crate::input::keyboard::preflight_text_by_unit(text, deadline).is_err() {
@@ -88,7 +91,7 @@ pub(crate) fn type_text_into_focused_web_control(
     if append {
         crate::tree::web_content::move_caret_to_end(element, deadline);
     }
-    crate::input::keyboard::synthesize_text_by_unit(text, pid, deadline, |deadline| {
+    crate::input::keyboard::synthesize_text_by_unit(text, pid, deadline, multiline, |deadline| {
         verify_background_delivery_target(element, identity, deadline)
     })?;
     Ok(true)

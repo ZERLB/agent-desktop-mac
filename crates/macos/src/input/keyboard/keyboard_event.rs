@@ -8,6 +8,8 @@ const TEXT_CHUNK_BUDGET: Duration = Duration::from_millis(400);
 const TEXT_UNIT_BUDGET: Duration = Duration::from_millis(25);
 const MAX_TEXT_UTF16: usize = 1_000_000;
 const TEXT_CHUNK_UTF16: usize = 32;
+const LINE_FEED: u16 = 0x0A;
+const RETURN_KEY_CODE: u16 = 36;
 
 pub(crate) fn post_key(
     key_code: u16,
@@ -33,26 +35,49 @@ pub(crate) fn post_text(
     verify_target: impl FnMut(Deadline) -> Result<(), AdapterError>,
 ) -> Result<(), AdapterError> {
     preflight_text(text, deadline)?;
-    post_chunks(text_chunks(text)?, target_pid, deadline, verify_target)
+    post_chunks(
+        text_chunks(text)?,
+        target_pid,
+        deadline,
+        false,
+        verify_target,
+    )
 }
 
 /// Posts `text` one UTF-16 code unit per key event. Chromium applies a Unicode key event
 /// to a page in a background application only when it carries a single code unit; it
-/// drops longer strings, including both halves of a surrogate pair sent together.
+/// drops longer strings, including both halves of a surrogate pair sent together, and a
+/// line feed. In a `multiline` field each line break goes as Shift+Return, which adds a
+/// line in a chat box instead of sending the message.
 pub(crate) fn post_text_by_unit(
     text: &str,
     target_pid: i32,
     deadline: Deadline,
+    multiline: bool,
     verify_target: impl FnMut(Deadline) -> Result<(), AdapterError>,
 ) -> Result<(), AdapterError> {
     preflight_text_by_unit(text, deadline)?;
-    post_chunks(text_units(text)?, target_pid, deadline, verify_target)
+    post_chunks(
+        text_units(text)?,
+        target_pid,
+        deadline,
+        multiline,
+        verify_target,
+    )
+}
+
+/// The key code and flags of a text event that is sent as a key instead of as Unicode:
+/// with `shift_return_line_breaks`, a line feed becomes Shift+Return.
+fn line_break_key(chunk: &[u16], shift_return_line_breaks: bool) -> Option<(u16, CGEventFlags)> {
+    (shift_return_line_breaks && chunk == [LINE_FEED])
+        .then_some((RETURN_KEY_CODE, CGEventFlags::CGEventFlagShift))
 }
 
 fn post_chunks(
     chunks: Vec<Vec<u16>>,
     target_pid: i32,
     deadline: Deadline,
+    shift_return_line_breaks: bool,
     mut verify_target: impl FnMut(Deadline) -> Result<(), AdapterError>,
 ) -> Result<(), AdapterError> {
     let total = chunks.len();
@@ -66,10 +91,14 @@ fn post_chunks(
             })))
         })?;
         let source = event_source().map_err(|error| delivery.annotate(error))?;
-        let down = create_key_event(&source, 0, true, CGEventFlags::empty())
+        let key = line_break_key(&chunk, shift_return_line_breaks);
+        let (key_code, flags) = key.unwrap_or((0, CGEventFlags::empty()));
+        let down = create_key_event(&source, key_code, true, flags)
             .map_err(|error| delivery.annotate(error))?;
-        down.set_string_from_utf16_unchecked(&chunk);
-        let up = create_key_event(&source, 0, false, CGEventFlags::empty())
+        if key.is_none() {
+            down.set_string_from_utf16_unchecked(&chunk);
+        }
+        let up = create_key_event(&source, key_code, false, flags)
             .map_err(|error| delivery.annotate(error))?;
         post_pair((down, up), Some(target_pid), deadline, &mut delivery, total)?;
     }
@@ -225,7 +254,8 @@ fn text_chunks(text: &str) -> Result<Vec<Vec<u16>>, AdapterError> {
 
 fn text_units(text: &str) -> Result<Vec<Vec<u16>>, AdapterError> {
     let _ = planned_unit_count(text)?;
-    Ok(text.encode_utf16().map(|unit| vec![unit]).collect())
+    let lines = text.replace("\r\n", "\n").replace('\r', "\n");
+    Ok(lines.encode_utf16().map(|unit| vec![unit]).collect())
 }
 
 fn planned_unit_count(text: &str) -> Result<usize, AdapterError> {
@@ -285,6 +315,23 @@ mod tests {
         assert_eq!(roundtrip, text);
         assert_eq!(units.len(), text.encode_utf16().count());
         assert!(units.iter().all(|unit| unit.len() == 1));
+    }
+
+    #[test]
+    fn line_breaks_become_shift_return_only_in_multiline_fields() {
+        let units = text_units("uno\r\ndos\rtres").unwrap();
+        let breaks = units
+            .iter()
+            .filter(|unit| line_break_key(unit, true).is_some())
+            .count();
+
+        assert_eq!(breaks, 2, "CRLF and CR each make one line break");
+        assert_eq!(
+            line_break_key(&[LINE_FEED], true),
+            Some((RETURN_KEY_CODE, CGEventFlags::CGEventFlagShift))
+        );
+        assert_eq!(line_break_key(&[LINE_FEED], false), None);
+        assert_eq!(line_break_key(&[u16::from(b'a')], true), None);
     }
 
     #[test]

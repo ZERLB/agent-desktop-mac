@@ -67,6 +67,7 @@ pub(crate) fn synthesize_text_by_unit(
     text: &str,
     target_pid: i32,
     deadline: Deadline,
+    multiline: bool,
     verify_target: impl FnMut(Deadline) -> Result<(), AdapterError>,
 ) -> Result<(), AdapterError> {
     tracing::debug!(
@@ -78,6 +79,7 @@ pub(crate) fn synthesize_text_by_unit(
         text,
         target_pid,
         deadline,
+        multiline,
         verify_target,
     )
 }
