@@ -5,22 +5,26 @@ use agent_desktop_core::{
 
 use crate::tree::AXElement;
 
-/// Types `text` into a text control. Headless, Safari and Chromium accept an
-/// `AXSelectedText` write on a web text field and then drop it, so a web field is focused
-/// first (inside its own application) and, when its value did not change, the text is
-/// spliced in at the selection through `AXValue`.
+/// Types `text` into a text control. Headless, the text is inserted at the selection
+/// through `AXSelectedText`. Two controls need the same text spliced in through `AXValue`
+/// instead: a web field, which Safari and Chromium accept the insertion on and then drop
+/// (it is focused first, inside its own application), and a single-line native field such
+/// as a search field, which drops an `AXSelectedText` write until it holds keyboard focus.
+/// An unfocused single-line field has no caret, so its text is spliced at once; a focused
+/// one keeps the caret insertion. Multi-line text is never rewritten through `AXValue`,
+/// which would drop its formatting.
 pub(crate) fn execute_type(
     element: &AXElement,
     text: &str,
     policy: InteractionPolicy,
     deadline: Deadline,
 ) -> Result<ActionStep, AdapterError> {
-    if !is_text_target(element, deadline)? {
+    let Some(role) = text_target_role(element, deadline)? else {
         return Err(AdapterError::new(
             ErrorCode::ActionNotSupported,
             "Type requires a text field, secure text field, or combo box",
         ));
-    }
+    };
     if policy.is_headed() {
         crate::actions::physical_keyboard::type_text(element, text, policy, deadline)?;
         return Ok(ActionStep::succeeded("PIDTargetedUnicodeText")
@@ -28,28 +32,73 @@ pub(crate) fn execute_type(
             .with_verified(false));
     }
     let web = crate::tree::web_content::focus_web_text_control(element, deadline);
-    let web_before = web.then(|| web_value_and_selection(element, deadline));
-    insert_selected_text(element, text, deadline)?;
-    if let Some((before, selection)) = web_before
-        && crate::tree::copy_value_typed(element, deadline).unwrap_or_default() == before
-    {
-        let spliced = crate::tree::web_content::splice_at_selection(&before, selection, text);
-        if let Err(error) =
-            crate::actions::ax_helpers::set_ax_value_coerced(element, &spliced, deadline)
-            && crate::tree::copy_value_typed(element, deadline).as_deref() != Some(&spliced)
-        {
-            return Err(error);
+    let (before, selection) = value_and_selection(element, deadline);
+    let unfocused_single_line = !web
+        && is_single_line(&role)
+        && crate::tree::copy_bool_attr(element, "AXFocused", deadline) != Some(true);
+    if !unfocused_single_line {
+        match insert_selected_text(element, text, deadline) {
+            Ok(())
+                if web
+                    && crate::tree::copy_value_typed(element, deadline).unwrap_or_default()
+                        == before => {}
+            Ok(()) => return Ok(semantic_step("AXSelectedText")),
+            Err(error)
+                if error.disposition == DeliverySemantics::not_delivered()
+                    && is_single_line(&role) => {}
+            Err(error) => return Err(error),
         }
-        return Ok(ActionStep::succeeded("AXValue")
-            .with_mechanism(StepMechanism::SemanticApi)
-            .with_verified(false));
     }
-    Ok(ActionStep::succeeded("AXSelectedText")
-        .with_mechanism(StepMechanism::SemanticApi)
-        .with_verified(false))
+    let caret = if unfocused_single_line {
+        None
+    } else {
+        selection
+    };
+    let spliced = crate::tree::web_content::splice_at_selection(&before, caret, text);
+    if let Err(error) =
+        crate::actions::ax_helpers::set_ax_value_coerced(element, &spliced, deadline)
+        && crate::tree::copy_value_typed(element, deadline).as_deref() != Some(&spliced)
+    {
+        return Err(error);
+    }
+    Ok(semantic_step("AXValue"))
 }
 
-fn web_value_and_selection(
+fn semantic_step(label: &'static str) -> ActionStep {
+    ActionStep::succeeded(label)
+        .with_mechanism(StepMechanism::SemanticApi)
+        .with_verified(false)
+}
+
+fn is_single_line(role: &str) -> bool {
+    matches!(role, "AXTextField" | "AXSecureTextField" | "AXComboBox")
+}
+
+/// Where typed text lands, in UTF-16 units. A single-line native field without keyboard
+/// focus has no caret, and macOS reports its selection at 0 even though typing appends,
+/// so its caret is the end of the value; any other control reports its own selection.
+pub(crate) fn typing_caret(
+    element: &AXElement,
+    deadline: Deadline,
+) -> Option<std::ops::Range<usize>> {
+    let role =
+        crate::tree::properties::attributes::copy_string_attr_result(element, "AXRole", deadline)
+            .ok()
+            .flatten();
+    let unfocused_single_line = role.as_deref().is_some_and(is_single_line)
+        && crate::tree::copy_bool_attr(element, "AXFocused", deadline) != Some(true)
+        && !crate::tree::web_content::is_inside_web_area(element, deadline);
+    if unfocused_single_line {
+        let end = crate::tree::copy_value_typed(element, deadline)
+            .unwrap_or_default()
+            .encode_utf16()
+            .count();
+        return Some(end..end);
+    }
+    crate::tree::properties::attributes::selected_text_range(element, deadline)
+}
+
+fn value_and_selection(
     element: &AXElement,
     deadline: Deadline,
 ) -> (String, Option<std::ops::Range<usize>>) {
@@ -84,7 +133,10 @@ fn write_selected_text(
     write("AXSelectedText", text)
 }
 
-fn is_text_target(element: &AXElement, deadline: Deadline) -> Result<bool, AdapterError> {
+fn text_target_role(
+    element: &AXElement,
+    deadline: Deadline,
+) -> Result<Option<String>, AdapterError> {
     prepare(element, deadline)?;
     let result =
         crate::tree::properties::attributes::copy_string_attr_result(element, "AXRole", deadline);
@@ -98,10 +150,12 @@ fn is_text_target(element: &AXElement, deadline: Deadline) -> Result<bool, Adapt
         )
         .with_details(serde_json::json!({ "ax_error": error }))
     })?;
-    Ok(matches!(
-        role.as_deref(),
-        Some("AXTextField" | "AXTextArea" | "AXSecureTextField" | "AXComboBox")
-    ))
+    Ok(role.filter(|role| {
+        matches!(
+            role.as_str(),
+            "AXTextField" | "AXTextArea" | "AXSecureTextField" | "AXComboBox"
+        )
+    }))
 }
 
 fn prepare(element: &AXElement, deadline: Deadline) -> Result<(), AdapterError> {

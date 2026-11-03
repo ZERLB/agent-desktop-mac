@@ -95,7 +95,8 @@ pub(crate) fn read_platform_available_actions(
         push_unique(&mut read.actions, capability::SET_FOCUS);
     }
     if role_may_insert_text(role)
-        && read_settable(el, "AXSelectedText", deadline, &mut read).unwrap_or(false)
+        && (value_settable
+            || read_settable(el, "AXSelectedText", deadline, &mut read).unwrap_or(false))
     {
         push_unique(&mut read.actions, capability::TYPE_TEXT);
     }

@@ -148,7 +148,7 @@ impl ObservationOps for MacOSAdapter {
     ) -> Result<Option<std::ops::Range<usize>>, AdapterError> {
         #[cfg(target_os = "macos")]
         {
-            Ok(crate::tree::properties::attributes::selected_text_range(
+            Ok(crate::actions::type_text::typing_caret(
                 ax_element(handle)?,
                 deadline,
             ))
