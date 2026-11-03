@@ -155,3 +155,68 @@ fn an_empty_window_selection_is_not_delivered_and_safe_to_retry() {
     assert_eq!(error.disposition, crate::DeliverySemantics::not_delivered());
     assert_eq!(error.disposition.retry(), crate::RetryDisposition::Safe);
 }
+
+fn unfocused_window(id: &str, title: &str, bounds: Option<crate::Rect>) -> WindowInfo {
+    let mut window = window(Some("generation-a"));
+    window.id = id.into();
+    window.title = title.into();
+    window.bounds = bounds;
+    window.state.is_focused = false;
+    window
+}
+
+fn rect(x: f64, y: f64, width: f64, height: f64) -> crate::Rect {
+    crate::Rect {
+        x,
+        y,
+        width,
+        height,
+    }
+}
+
+fn ambiguity(candidates: Vec<WindowInfo>) -> crate::AdapterError {
+    let error = select_window(
+        candidates,
+        crate::AdapterError::new(ErrorCode::WindowNotFound, "none"),
+        "multiple",
+    )
+    .unwrap_err();
+    let AppError::Adapter(error) = error else {
+        panic!("expected adapter error");
+    };
+    error
+}
+
+#[test]
+fn an_ambiguous_window_choice_names_the_window_that_encloses_the_others() {
+    let error = ambiguity(vec![
+        unfocused_window("w-1", "Calculator", Some(rect(613.0, 338.0, 230.0, 408.0))),
+        unfocused_window("w-2", "Window", Some(rect(629.0, 354.0, 66.0, 20.0))),
+    ]);
+
+    let suggestion = error.suggestion.as_deref().unwrap();
+    assert!(suggestion.contains("--window-id w-1"), "{suggestion}");
+    assert_eq!(
+        error.details.as_ref().unwrap()["candidates"][1]["bounds"]["width"],
+        66.0
+    );
+}
+
+#[test]
+fn an_ambiguous_window_choice_without_an_enclosing_window_keeps_the_generic_suggestion() {
+    let side_by_side = ambiguity(vec![
+        unfocused_window("w-1", "Left", Some(rect(0.0, 0.0, 400.0, 400.0))),
+        unfocused_window("w-2", "Right", Some(rect(500.0, 0.0, 400.0, 400.0))),
+    ]);
+    let without_bounds = ambiguity(vec![
+        unfocused_window("w-1", "One", None),
+        unfocused_window("w-2", "Two", None),
+    ]);
+
+    for error in [side_by_side, without_bounds] {
+        assert_eq!(
+            error.suggestion.as_deref(),
+            Some("Run 'list-windows' and retry with --window-id <id>.")
+        );
+    }
+}

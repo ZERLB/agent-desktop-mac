@@ -119,22 +119,61 @@ pub(crate) fn select_window(
         .iter()
         .take(10)
         .map(|window| {
-            json!({
+            let mut summary = json!({
                 "id": window.id,
                 "title": window.title,
                 "is_focused": window.state.is_focused,
                 "visible": window.state.visible,
-            })
+            });
+            if let Some(bounds) = &window.bounds {
+                summary["bounds"] = json!(bounds);
+            }
+            summary
         })
         .collect::<Vec<_>>();
+    let suggestion = match enclosing_window(&candidates) {
+        Some(window) => format!(
+            "Window {} ('{}') encloses the other candidates, which look like parts of it: retry with --window-id {} if that is the window you mean, or run 'list-windows'.",
+            window.id, window.title, window.id
+        ),
+        None => "Run 'list-windows' and retry with --window-id <id>.".to_string(),
+    };
     Err(crate::AdapterError::ambiguous_target(ambiguous_message)
-        .with_suggestion("Run 'list-windows' and retry with --window-id <id>.")
+        .with_suggestion(suggestion)
         .with_details(json!({
             "candidate_count": candidates.len(),
             "candidate_summaries_truncated": candidates.len() > summaries.len(),
             "candidates": summaries,
         }))
         .into())
+}
+
+/// The candidate whose bounds hold every other candidate's bounds and are larger, such
+/// as an app window with a small accessory window drawn over it. It is only named in the
+/// suggestion, never chosen: a small alert over a document also sits inside the window.
+fn enclosing_window(candidates: &[WindowInfo]) -> Option<&WindowInfo> {
+    candidates.iter().find(|outer| {
+        let Some(outer_bounds) = &outer.bounds else {
+            return false;
+        };
+        candidates
+            .iter()
+            .filter(|inner| inner.id != outer.id)
+            .all(|inner| {
+                inner
+                    .bounds
+                    .as_ref()
+                    .is_some_and(|inner_bounds| encloses(outer_bounds, inner_bounds))
+            })
+    })
+}
+
+fn encloses(outer: &crate::Rect, inner: &crate::Rect) -> bool {
+    inner.x >= outer.x
+        && inner.y >= outer.y
+        && inner.x + inner.width <= outer.x + outer.width
+        && inner.y + inner.height <= outer.y + outer.height
+        && inner.width * inner.height < outer.width * outer.height
 }
 
 #[cfg(test)]

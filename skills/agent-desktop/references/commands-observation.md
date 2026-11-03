@@ -36,7 +36,7 @@ Choose the scope:
 - `--root <REF>` starts from a ref found earlier. Re-drilling a root replaces the refs from that root's previous drill, and those of any drill made under it. Refs outside the drilled subtree keep working, skeleton refs inside it are replaced, and the new refs join the same snapshot id. A drill inherits the whole-window identity count of its snapshot, so its refs resolve like the skeleton's. `--root` cannot combine with `--surface` or `--wait-for`.
 - `--max-depth` (default 10) limits depth. Reach deeper subtrees with `--root`.
 - Use `--include-bounds` only when you need coordinates.
-- With `--app` and no `--window-id`, `snapshot` and `find` take the app's only visible window, else its only focused window, and answer `AMBIGUOUS_TARGET` with the candidates when neither settles it. Pass `--window-id` when an app has several windows.
+- With `--app` and no `--window-id`, `snapshot` and `find` take the app's only visible window, else its only focused window, and answer `AMBIGUOUS_TARGET` with the candidates when neither settles it, each with its `bounds`. When one candidate encloses all the others, such as an app window with a small accessory window drawn over it, the suggestion names it; the choice stays yours, because a small alert over a document also sits inside the window. Pass `--window-id` when an app has several windows.
 
 ### Partial trees
 
