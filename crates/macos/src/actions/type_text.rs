@@ -9,6 +9,8 @@ use crate::tree::AXElement;
 /// through `AXSelectedText`. A web field is focused inside its own application and, once
 /// it holds that application's keyboard focus, receives the text as key events posted to
 /// its process, because rich web editors and script-driven fields ignore semantic writes.
+/// Typed web text is appended unless the field was already focused with its caret placed
+/// or text selected, since a focus write leaves a `contenteditable` caret at the start.
 /// Two controls need the text spliced in through `AXValue` instead: a web field that does
 /// not take focus, which Safari and Chromium accept the insertion on and then drop, and a
 /// single-line native field such as a search field, which drops an `AXSelectedText` write
@@ -33,15 +35,20 @@ pub(crate) fn execute_type(
             .with_mechanism(StepMechanism::PhysicalSynthetic)
             .with_verified(false));
     }
-    let web = crate::tree::web_content::focus_web_text_control(element, deadline);
+    let web_caret = crate::tree::web_content::focus_web_text_control_for_typing(element, deadline);
+    let web = web_caret.is_some();
+    let append = web_caret == Some(false);
     if web
         && crate::actions::physical_keyboard::type_text_into_focused_web_control(
-            element, text, deadline,
+            element, text, append, deadline,
         )?
     {
         return Ok(ActionStep::succeeded("PIDTargetedUnicodeText")
             .with_mechanism(StepMechanism::PhysicalSynthetic)
             .with_verified(false));
+    }
+    if append {
+        crate::tree::web_content::move_caret_to_end(element, deadline);
     }
     let (before, selection) = value_and_selection(element, deadline);
     let unfocused_single_line = !web
@@ -87,7 +94,9 @@ fn is_single_line(role: &str) -> bool {
 
 /// Where typed text lands, in UTF-16 units. A single-line native field without keyboard
 /// focus has no caret, and macOS reports its selection at 0 even though typing appends,
-/// so its caret is the end of the value; any other control reports its own selection.
+/// so its caret is the end of the value. A web field gets its text at the end too unless
+/// it already holds focus with its caret placed or text selected, as `execute_type`
+/// does. Any other control reports its own selection.
 pub(crate) fn typing_caret(
     element: &AXElement,
     deadline: Deadline,
@@ -96,17 +105,21 @@ pub(crate) fn typing_caret(
         crate::tree::properties::attributes::copy_string_attr_result(element, "AXRole", deadline)
             .ok()
             .flatten();
-    let unfocused_single_line = role.as_deref().is_some_and(is_single_line)
-        && crate::tree::copy_bool_attr(element, "AXFocused", deadline) != Some(true)
-        && !crate::tree::web_content::is_inside_web_area(element, deadline);
-    if unfocused_single_line {
+    let focused = crate::tree::copy_bool_attr(element, "AXFocused", deadline) == Some(true);
+    let selection = crate::tree::properties::attributes::selected_text_range(element, deadline);
+    let appends = if crate::tree::web_content::is_inside_web_area(element, deadline) {
+        !crate::tree::web_content::holds_placed_caret(focused, selection.clone())
+    } else {
+        role.as_deref().is_some_and(is_single_line) && !focused
+    };
+    if appends {
         let end = crate::tree::copy_value_typed(element, deadline)
             .unwrap_or_default()
             .encode_utf16()
             .count();
         return Some(end..end);
     }
-    crate::tree::properties::attributes::selected_text_range(element, deadline)
+    selection
 }
 
 fn value_and_selection(

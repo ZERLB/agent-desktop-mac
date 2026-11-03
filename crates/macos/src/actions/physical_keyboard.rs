@@ -3,6 +3,9 @@ use std::time::{Duration, Instant};
 
 use crate::tree::AXElement;
 
+const BACKGROUND_FOCUS_WAIT: Duration = Duration::from_millis(1_000);
+const BACKGROUND_FOCUS_RECHECK: Duration = Duration::from_millis(150);
+
 pub(crate) fn press(
     element: &AXElement,
     combo: &KeyCombo,
@@ -54,11 +57,13 @@ pub(crate) fn type_text(
 /// activated and the pointer does not move. Rich web editors (`contenteditable`, as in
 /// chat and document apps) and fields driven by page scripts apply only text that
 /// arrives as input events, which a semantic `AXValue` or `AXSelectedText` write never
-/// fires. Returns `Ok(false)`, with nothing sent, when the control does not hold its
+/// fires. With `append`, the caret moves to the end once the control holds focus.
+/// Returns `Ok(false)`, with nothing sent, when the control does not hold its
 /// application's keyboard focus or the text cannot be sent within the deadline.
 pub(crate) fn type_text_into_focused_web_control(
     element: &AXElement,
     text: &str,
+    append: bool,
     deadline: Deadline,
 ) -> Result<bool, AdapterError> {
     if crate::input::keyboard::preflight_text_by_unit(text, deadline).is_err() {
@@ -73,8 +78,15 @@ pub(crate) fn type_text_into_focused_web_control(
     else {
         return Ok(false);
     };
-    if wait_for_focused_element(element, pid, deadline).is_err() {
+    if !background_focus_matches(element, pid, deadline, BACKGROUND_FOCUS_WAIT) {
+        tracing::debug!(
+            pid,
+            "keyboard: web control did not take focus; semantic write instead"
+        );
         return Ok(false);
+    }
+    if append {
+        crate::tree::web_content::move_caret_to_end(element, deadline);
     }
     crate::input::keyboard::synthesize_text_by_unit(text, pid, deadline, |deadline| {
         verify_background_delivery_target(element, identity, deadline)
@@ -94,7 +106,7 @@ fn verify_background_delivery_target(
         )
         .with_disposition(agent_desktop_core::DeliverySemantics::not_delivered()));
     }
-    if focused_element_matches(expected, identity.pid(), deadline)? {
+    if background_focus_matches(expected, identity.pid(), deadline, BACKGROUND_FOCUS_RECHECK) {
         return Ok(());
     }
     Err(AdapterError::new(
@@ -102,6 +114,30 @@ fn verify_background_delivery_target(
         "Target element lost focus before PID-targeted text delivery",
     )
     .with_disposition(agent_desktop_core::DeliverySemantics::not_delivered()))
+}
+
+/// Whether `expected` holds its application's keyboard focus within `wait`. A busy
+/// application can fail a focus read with a transient error, which counts as "not yet"
+/// instead of ending the wait.
+fn background_focus_matches(
+    expected: &AXElement,
+    pid: i32,
+    deadline: Deadline,
+    wait: Duration,
+) -> bool {
+    let local_deadline = Instant::now() + wait;
+    loop {
+        if focused_element_matches(expected, pid, deadline).unwrap_or(false) {
+            return true;
+        }
+        if Instant::now() >= local_deadline {
+            return false;
+        }
+        let Ok(pause) = deadline.remaining_slice(Duration::from_millis(10)) else {
+            return false;
+        };
+        std::thread::sleep(pause);
+    }
 }
 
 fn prepare_target(
