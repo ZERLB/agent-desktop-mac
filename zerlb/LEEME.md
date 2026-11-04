@@ -88,6 +88,14 @@ Las pruebas del proyecto se corren como dice `AGENTS.md`. Al 3-nov-2026 pasan la
 
 `agent-desktop mcp` (el servidor MCP del original, desde el 3-nov-2026) habla por la entrada y la salida estándar durante toda la sesión, y corre cada herramienta con el binario real. Por eso el envoltorio no retiene su salida: lo pasa a `zerlb/herramientas/registro_mcp.py`, que deja pasar cada mensaje tal cual y anota cada `tools/call` con los mismos campos, más `"via":"mcp"`. Si el servidor rechaza un argumento, anota `TOOL_ERROR` con el motivo sin lo que iba entre comillas. Al cerrarse el servidor deja una línea `mcp` con su duración, que el resumen cuenta aparte. Para conectarlo a un cliente MCP, el comando es el envoltorio con el argumento `mcp`. Su prueba, sin pantalla: `python3 -I zerlb/herramientas/prueba_registro_mcp.py`.
 
+**La app Claude de escritorio** arranca sus servidores MCP con un ayudante (`disclaimer`) que hace que macOS cobre los permisos al programa arrancado y no a la app. Si ese programa es un script, el permiso le toca al intérprete. Si es el binario de agent-desktop, su firma cambia con cada compilación y el permiso se pierde. Por eso hay un lanzador fijo, `zerlb/herramientas/lanzador_mcp.c`, que se queda como padre y arranca el envoltorio con el binario real. Se compila una vez, fuera de las carpetas protegidas, con las rutas del equipo:
+
+```sh
+sh zerlb/herramientas/compilar_lanzador_mcp.sh ~/Library/Application\ Support/AgentDesktop/mcp/agent-desktop-mcp RUTA/agent-desktop RUTA/registro.sh
+```
+
+En la configuración de la app Claude: `"agent-desktop": {"command": "<ruta del lanzador>"}`. La primera vez, macOS pide para el lanzador los permisos de la carpeta donde estén el binario y el envoltorio, Accesibilidad y Grabación de pantalla. No lo vuelvas a compilar si no cambian las rutas: los permisos van atados a su firma. Comprobado el 4-nov-2026 con el mismo ayudante: un chat sin terminal hizo 12 × 4 en la Calculadora sin pasarla al frente y leyó 48 en la lectura y en la captura.
+
 ```sh
 python3 zerlb/herramientas/uso.py --dias 7          # resumen en texto
 python3 zerlb/herramientas/uso.py --dias 30 --md    # en Markdown, para un reporte
