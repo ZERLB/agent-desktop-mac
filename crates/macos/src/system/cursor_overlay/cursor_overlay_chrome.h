@@ -10,6 +10,7 @@ typedef struct {
     double rim[3];
     double accent[3];
     double size;
+    uint8_t glass;
 } AgentDesktopCursorStyle;
 
 CGColorRef ADColor(const double *rgb, CGFloat alpha);

@@ -133,14 +133,37 @@ static CAShapeLayer *ADDartLayer(void) {
     return layer;
 }
 
+/// Paints the built-in arrow. The solid look fills the outline layer and the body in
+/// opaque colours; the glass look leaves the outline hollow and white, tints the body
+/// translucently, softens the shadow and adds a light inner edge.
 static void ADTintPointer(void) {
     const AgentDesktopCursorStyle *style = ADStyle();
     CAShapeLayer *rim = (CAShapeLayer *)ADPointer.sublayers.firstObject;
     CAShapeLayer *dart = (CAShapeLayer *)ADPointer.sublayers.lastObject;
-    rim.fillColor = ADColor(style->rim, 1.0);
-    rim.strokeColor = ADColor(style->rim, 1.0);
-    dart.fillColor = ADColor(style->fill, 1.0);
-    dart.strokeColor = ADColor(style->fill, 1.0);
+    if (style->glass != 0) {
+        static const double white[3] = {1.0, 1.0, 1.0};
+        rim.fillColor = NSColor.clearColor.CGColor;
+        rim.strokeColor = ADColor(white, 0.92);
+        rim.lineWidth = 3.2;
+        rim.shadowOpacity = 0.30;
+        rim.shadowRadius = 7.0;
+        rim.shadowOffset = CGSizeMake(0.0, -2.0);
+        dart.fillColor = ADColor(style->fill, 0.34);
+        dart.strokeColor = ADColor(white, 0.55);
+        dart.lineWidth = 1.2;
+        dart.shadowOpacity = 0.0;
+    } else {
+        rim.fillColor = ADColor(style->rim, 1.0);
+        rim.strokeColor = ADColor(style->rim, 1.0);
+        rim.lineWidth = 6.5;
+        rim.shadowOpacity = 0.34;
+        rim.shadowRadius = 5.0;
+        rim.shadowOffset = CGSizeMake(2.5, -3.0);
+        dart.fillColor = ADColor(style->fill, 1.0);
+        dart.strokeColor = ADColor(style->fill, 1.0);
+        dart.lineWidth = 3.0;
+        dart.shadowOpacity = 0.32;
+    }
     ADPointer.transform = CATransform3DMakeScale(style->size, style->size, 1.0);
 }
 

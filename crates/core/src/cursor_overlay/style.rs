@@ -1,4 +1,4 @@
-use super::{CursorImage, CursorImages};
+use super::{CursorImage, CursorImages, CursorLook};
 use crate::{AdapterError, ErrorCode};
 use serde::{Deserialize, Serialize};
 
@@ -26,6 +26,8 @@ pub struct CursorOverlayStyle {
     highlight: bool,
     #[serde(default, skip_serializing_if = "CursorImages::is_empty")]
     images: CursorImages,
+    #[serde(default, skip_serializing_if = "CursorLook::is_solid")]
+    look: CursorLook,
 }
 
 impl CursorOverlayStyle {
@@ -74,6 +76,14 @@ impl CursorOverlayStyle {
     pub fn set_effects(&mut self, ripple: bool, highlight: bool) {
         self.ripple = ripple;
         self.highlight = highlight;
+    }
+
+    pub fn set_look(&mut self, look: CursorLook) {
+        self.look = look;
+    }
+
+    pub const fn look(&self) -> CursorLook {
+        self.look
     }
 
     pub fn set_image(&mut self, image: Option<CursorImage>) {
@@ -134,6 +144,7 @@ impl Default for CursorOverlayStyle {
             ripple: true,
             highlight: true,
             images: CursorImages::default(),
+            look: CursorLook::Solid,
         }
     }
 }

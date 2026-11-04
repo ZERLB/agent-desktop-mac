@@ -149,9 +149,12 @@ void ADRipplePlay(NSWindow *window) {
     for (NSUInteger index = 0; index < layers.count; index += 1) {
         CAShapeLayer *layer = (CAShapeLayer *)layers[index];
         [layer removeAllAnimations];
+        static const double white[3] = {1.0, 1.0, 1.0};
         layer.fillColor = index == 0 ? ADColor(ADCurrentStyle.accent, 1.0)
                                      : NSColor.clearColor.CGColor;
-        layer.strokeColor = ADColor(ADCurrentStyle.accent, 1.0);
+        layer.strokeColor = ADCurrentStyle.glass != 0 && index > 0
+                                ? ADColor(white, 0.95)
+                                : ADColor(ADCurrentStyle.accent, 1.0);
         CAKeyframeAnimation *opacity =
             [CAKeyframeAnimation animationWithKeyPath:@"opacity"];
         opacity.values = index == 0 ? @[ @0.0, @0.42, @0.0 ] : @[ @0.0, @0.9, @0.0 ];

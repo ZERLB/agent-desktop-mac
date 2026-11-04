@@ -8,6 +8,7 @@ mod images;
 mod instruction;
 mod label_pill;
 mod layout;
+mod look;
 mod motion;
 mod motion_profile;
 mod path_shape;
@@ -31,6 +32,7 @@ pub use label_pill::{
     LABEL_SHADOW_BLUR, LABEL_SHADOW_OFFSET, LABEL_SHADOW_OPACITY, LabelPill,
 };
 pub use layout::{CURSOR_SAME_POINT, place_label};
+pub use look::CursorLook;
 pub use motion::CursorMotion;
 pub use motion_profile::CursorMotionProfile;
 pub use phase::CursorPhase;

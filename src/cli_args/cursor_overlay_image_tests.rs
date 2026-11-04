@@ -172,3 +172,15 @@ fn a_pointer_image_is_verified_and_stored_beside_the_arrow() {
         .expect_err("missing pointer image");
     assert_eq!(error.code(), "INVALID_ARGS");
 }
+
+#[test]
+fn look_glass_reaches_the_core_style_and_an_unknown_look_is_refused() {
+    let glass = parse(&["--look", "glass"]).unwrap();
+    assert!(glass.enable.style.to_core().unwrap().look().is_glass());
+
+    let neon = parse(&["--look", "neon"]).unwrap();
+    let error = neon.enable.style.to_core().unwrap_err();
+    assert_eq!(error.code(), "INVALID_ARGS");
+
+    assert!(parse(&["--look", "glass", "--image", "cursor.png"]).is_err());
+}

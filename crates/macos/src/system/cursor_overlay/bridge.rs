@@ -18,6 +18,7 @@ struct NativeCursorStyle {
     rim: [f64; 3],
     accent: [f64; 3],
     size: f64,
+    glass: u8,
 }
 
 #[repr(C)]
@@ -226,6 +227,7 @@ pub(super) fn apply_style(style: &CursorOverlayStyle, image_changed: bool) {
         rim: style.rim_rgb(),
         accent: style.accent_rgb(),
         size: style.size(),
+        glass: u8::from(style.look().is_glass()),
     };
     unsafe { agent_desktop_cursor_overlay_style(&native) }
     if image_changed {
