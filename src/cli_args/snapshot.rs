@@ -34,4 +34,12 @@ pub(crate) struct SnapshotArgs {
     )]
     #[serde(default)]
     pub force_electron_a11y: bool,
+    #[arg(
+        long,
+        value_name = "SNAPSHOT_ID",
+        conflicts_with = "root",
+        help = "Also report what changed since this earlier snapshot of the same window: the nodes that appeared, with their text and refs, and how many of each role are gone"
+    )]
+    #[serde(default)]
+    pub diff: Option<String>,
 }

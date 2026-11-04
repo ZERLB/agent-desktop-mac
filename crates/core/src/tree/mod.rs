@@ -19,5 +19,6 @@ pub mod role_text;
 pub mod roles;
 pub(crate) mod search_text;
 pub mod state;
+pub(crate) mod tree_diff;
 pub mod tree_options;
 pub(crate) mod value_matches;

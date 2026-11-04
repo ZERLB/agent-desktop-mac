@@ -29,6 +29,9 @@ pub struct SnapshotArgs {
     /// need to guess at guidance. Threaded into the request's observation
     /// mode.
     pub force_electron_a11y: bool,
+    /// An earlier snapshot of the same window to compare against: the result then
+    /// carries a `diff` block with the nodes that appeared and how many are gone.
+    pub diff_from: Option<String>,
 }
 
 fn tree_options(args: &SnapshotArgs) -> crate::adapter::TreeOptions {
@@ -61,6 +64,13 @@ pub fn execute(
         compact = args.compact,
         "tree: snapshot"
     );
+
+    if args.diff_from.is_some() && (args.root_ref.is_some() || context.wait_selector().is_some()) {
+        return Err(AppError::invalid_input_with_suggestion(
+            "--diff cannot be combined with --root, --wait-for or --wait-for-gone",
+            "Run snapshot --diff <snapshot_id> on the whole window, without those flags.",
+        ));
+    }
 
     if let Some(root) = args.root_ref.as_deref() {
         if context.wait_selector().is_some() {
@@ -115,7 +125,40 @@ pub fn execute(
             .unwrap_or(snapshot::DEFAULT_SNAPSHOT_TIMEOUT_MS),
     )?;
 
-    format_result(result)
+    let diff = compare_with_baseline(&result, &opts, args.diff_from.as_deref(), context)?;
+    let mut body = format_result(result)?;
+    if let Some(diff) = diff {
+        body["diff"] = diff;
+    }
+    Ok(body)
+}
+
+/// Keeps the fingerprints of this snapshot for a later `--diff`, and compares it with
+/// `baseline` when one is named. Saving is best effort: a snapshot never fails for it.
+fn compare_with_baseline(
+    result: &snapshot::SnapshotResult,
+    opts: &crate::adapter::TreeOptions,
+    baseline: Option<&str>,
+    context: &CommandContext,
+) -> Result<Option<Value>, AppError> {
+    let store = crate::refs::refs_store::RefStore::for_session(context.session_id())?;
+    let window = crate::tree::tree_diff::DiffWindow {
+        app: &result.window.app,
+        window_id: &result.window.id,
+        view: crate::tree::tree_diff::view_of(opts),
+        complete: result.complete,
+    };
+    if let Some(snapshot_id) = result.snapshot_id.as_deref()
+        && let Err(error) =
+            crate::tree::tree_diff::save_fingerprints(&store, snapshot_id, &result.tree, &window)
+    {
+        tracing::debug!(?error, "snapshot: fingerprints not saved");
+    }
+    baseline
+        .map(|baseline| {
+            crate::tree::tree_diff::diff_against(&store, baseline, &result.tree, &window)
+        })
+        .transpose()
 }
 
 fn format_result(result: snapshot::SnapshotResult) -> Result<Value, AppError> {

@@ -134,6 +134,19 @@ A snapshot that needed one complete read of its window to prove its refs, and co
 - Focusing an inactive text field can change its selection. A pre-focus range cannot establish the expected insertion into a nonempty field; such a result is explicitly unverified rather than falsely contradicted.
 - A settle-loop pacing budget does not replace the caller's deadline for native reads. Tests assert deadline identity rather than arbitrary remaining-time thresholds.
 
+## Snapshot diff shape
+
+`snapshot --diff <snapshot_id>` adds `data.diff`:
+
+```json
+{ "baseline": "s8f3k2p9", "baseline_complete": true, "same_window": true, "same_view": true,
+  "complete": true, "unchanged": 26, "added_count": 1, "added_truncated": false,
+  "added": [ { "role": "statictext", "name": "42", "value": "42" } ],
+  "removed_count": 1, "removed_by_role": { "statictext": 1 } }
+```
+
+`added` holds at most 60 entries, each with `role` and, when present, `name`, `value`, `states` and `ref_id`; `added_truncated` is true when more appeared. Removed nodes are only counted by role, because a snapshot keeps a fingerprint of each node and not its text.
+
 ## Find result shape
 
 `find` match objects report the element's actual accessibility `name`. Elements

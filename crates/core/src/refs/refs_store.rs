@@ -234,6 +234,12 @@ impl RefStore {
         &self.base_dir
     }
 
+    /// The directory that holds the refmap of `snapshot_id` and the files kept beside it.
+    pub(crate) fn snapshot_dir(&self, snapshot_id: &str) -> Result<PathBuf, AppError> {
+        validate_snapshot_id(snapshot_id)?;
+        Ok(self.snapshots_dir().join(snapshot_id))
+    }
+
     pub(crate) fn trace_dir(&self) -> PathBuf {
         self.base_dir.join("trace")
     }

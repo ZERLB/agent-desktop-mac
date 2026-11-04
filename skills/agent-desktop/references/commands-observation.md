@@ -38,6 +38,18 @@ Choose the scope:
 - Use `--include-bounds` only when you need coordinates.
 - With `--app` and no `--window-id`, `snapshot` and `find` take the app's only visible window, else its only focused window, and answer `AMBIGUOUS_TARGET` with the candidates when neither settles it, each with its `bounds`. When one candidate encloses all the others, such as an app window with a small accessory window drawn over it, the suggestion names it; the choice stays yours, because a small alert over a document also sits inside the window. Pass `--window-id` when an app has several windows.
 
+### What changed
+
+`snapshot --diff <snapshot_id>` also compares the new tree with an earlier snapshot of the same window, taken with the same flags: `data.diff` lists the nodes that appeared (`added`, with their text and refs, at most 60) and counts the ones that are gone (`removed_by_role`). A node whose text or states changed counts once in each. `same_window` and `same_view` say whether the baseline read the same window with the same depth, `-i`, `--compact` and surface; when `same_view` is false the lists mostly reflect the different flags. Take the baseline, act, then diff against its id:
+
+```bash
+agent-desktop snapshot --app "Calculator" -i --compact        # note data.snapshot_id
+agent-desktop click @s8f3k2p9:e12
+agent-desktop snapshot --app "Calculator" -i --compact --diff s8f3k2p9
+```
+
+A snapshot keeps only a fingerprint of each node for this (its role and a hash, never its text), so `removed` entries carry no text. A baseline taken before this version, or a missing one, fails with `INVALID_ARGS` or `SNAPSHOT_NOT_FOUND`. `--diff` does not combine with `--root` or `--wait-for`.
+
 ### Partial trees
 
 `data.complete` is on every snapshot. When the observation budget runs out, the command still succeeds with `"complete": false`, `"truncated": true`, `"nodes_observed"`, and the tree it saw. Each node with cut descendants carries `"subtree_truncated": true`. Read `complete`; do not wait for a `TIMEOUT`. Raise `--timeout-ms` (default 3000) or drill with `--root` to finish the tree. A `--root` drill is all or nothing: an incomplete read returns `TIMEOUT`.

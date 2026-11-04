@@ -129,6 +129,7 @@ fn invalid_snapshot_root_is_rejected_before_permission_preflight() {
         root: Some("bad-root".into()),
         timeout_ms: None,
         force_electron_a11y: false,
+        diff: None,
     });
 
     let err = preflight(&command, &report).expect_err("invalid root fails first");
