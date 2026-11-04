@@ -19,7 +19,10 @@ mod imp {
                 label: "AXPress",
                 func: crate::actions::chain::press_selection::press_or_report_no_effect,
             },
-            ChainStep::Action("AXOpen"),
+            ChainStep::CustomWithDeadline {
+                label: "AXOpen",
+                func: crate::actions::chain::open_guard::open_unless_file_item,
+            },
             ChainStep::CustomWithDeadline {
                 label: "activate_descendant",
                 func: crate::actions::chain::activate_descendant::activate_descendant,
@@ -122,7 +125,10 @@ mod imp {
     pub(crate) static SEMANTIC_CLICK_CHAIN: ChainDef = ChainDef {
         steps: &[
             ChainStep::Action("AXPress"),
-            ChainStep::Action("AXOpen"),
+            ChainStep::CustomWithDeadline {
+                label: "AXOpen",
+                func: crate::actions::chain::open_guard::open_unless_file_item,
+            },
             ChainStep::CustomWithDeadline {
                 label: "activate_descendant",
                 func: crate::actions::chain::activate_descendant::activate_descendant,

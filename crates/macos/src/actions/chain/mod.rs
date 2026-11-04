@@ -154,6 +154,7 @@ pub(super) mod chain_step;
 pub(crate) mod chain_step_exec;
 pub(crate) mod chain_value_write;
 pub(crate) mod chain_verify;
+pub(crate) mod open_guard;
 pub(crate) mod press_selection;
 #[cfg(test)]
 #[path = "chain_tests.rs"]
