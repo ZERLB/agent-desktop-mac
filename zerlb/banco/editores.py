@@ -47,7 +47,7 @@ def leer(wid):
 
     def rec(n):
         nonlocal estado
-        if n.get("ref_id") and n.get("name"):
+        if n.get("ref_id") and n.get("name") and n.get("role") == "textfield":
             refs.setdefault(n["name"], n["ref_id"])
         for clave in ("name", "value"):
             valor = n.get(clave)
