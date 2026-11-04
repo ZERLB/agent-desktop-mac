@@ -17,6 +17,21 @@
 REAL="${AGENT_DESKTOP_REAL:?Define AGENT_DESKTOP_REAL con la ruta del binario real de agent-desktop}"
 DIR="${AGENT_DESKTOP_USO:-$HOME/.agent-desktop-uso}"
 
+# El servidor MCP habla por la entrada y la salida estándar toda la sesión y no se puede
+# retener su salida: pasa por registro_mcp.py, que anota cada llamada de herramienta.
+previo=""
+for arg in "$@"; do
+    case "$previo" in
+        --session | --agent-id | --trace | --screenshot | --wait-for) ;;
+        *) case "$arg" in
+            -*) ;;
+            mcp) exec /usr/bin/python3 -I "${0:A:h}/registro_mcp.py" "$REAL" "$@" ;;
+            *) break ;;
+        esac ;;
+    esac
+    previo="$arg"
+done
+
 zmodload zsh/datetime
 inicio=$EPOCHREALTIME
 salida=$("$REAL" "$@")

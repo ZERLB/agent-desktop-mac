@@ -44,7 +44,8 @@ def resumir(filas, dias, md):
     titulo = f"Uso de agent-desktop · últimos {dias} días"
     fuera.append(f"## {titulo}" if md else titulo)
     ayudas = sum(1 for f in filas if f.get("ayuda"))
-    filas = [f for f in filas if not f.get("ayuda")]
+    servidores = sum(1 for f in filas if f.get("via") == "mcp" and f.get("cmd") == "mcp")
+    filas = [f for f in filas if not f.get("ayuda") and not (f.get("via") == "mcp" and f.get("cmd") == "mcp")]
     if not filas:
         fuera.append("Sin llamadas registradas en ese periodo." + (f" Consultas de ayuda: {ayudas}." if ayudas else ""))
         return "\n".join(fuera)
@@ -56,6 +57,9 @@ def resumir(filas, dias, md):
         f"modo físico: {fisicas} · de {filas[0]['t'][:10]} a {filas[-1]['t'][:10]}"
         + (f" · consultas de ayuda aparte: {ayudas}" if ayudas else "")
     )
+    por_mcp = sum(1 for f in filas if f.get("via") == "mcp")
+    if por_mcp or servidores:
+        fuera.append(f"Por MCP: {por_mcp} llamadas en {servidores} sesiones del servidor ya cerradas.")
     por_cmd = collections.defaultdict(list)
     for fila in filas:
         por_cmd[fila.get("cmd") or "(sin comando)"].append(fila)
