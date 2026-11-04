@@ -5,7 +5,9 @@
 /// to refuse its own successful write over them), so `\r\n` and lone `\r`
 /// count as `\n` on both sides. The number of breaks still has to agree, so
 /// a newline the control dropped or added is never verified; a control's own
-/// terminator is removed where it is read, not here.
+/// terminator is removed where it is read, not here. A no-break space counts as
+/// a space: web editors store a space typed at the start or end of the text, or
+/// next to another one, as U+00A0.
 pub fn value_matches(role: &str, expected: &str, observed: Option<&str>) -> bool {
     let Some(observed) = observed else {
         return false;
@@ -34,15 +36,27 @@ pub fn value_matches(role: &str, expected: &str, observed: Option<&str>) -> bool
 }
 
 fn normalize_text(value: &str) -> std::borrow::Cow<'_, str> {
-    if !value.contains('\r') {
+    if !value.contains(['\r', '\u{a0}']) {
         return std::borrow::Cow::Borrowed(value);
     }
-    std::borrow::Cow::Owned(value.replace("\r\n", "\n").replace('\r', "\n"))
+    std::borrow::Cow::Owned(
+        value
+            .replace("\r\n", "\n")
+            .replace('\r', "\n")
+            .replace('\u{a0}', " "),
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::value_matches;
+
+    #[test]
+    fn a_no_break_space_from_a_web_editor_counts_as_the_space_that_was_typed() {
+        assert!(value_matches("textfield", " uno", Some("\u{a0}uno")));
+        assert!(value_matches("textfield", "a  b", Some("a\u{a0} b")));
+        assert!(!value_matches("textfield", " uno", Some("uno")));
+    }
 
     #[test]
     fn numeric_readback_tolerance_does_not_hide_different_text_or_integer_targets() {

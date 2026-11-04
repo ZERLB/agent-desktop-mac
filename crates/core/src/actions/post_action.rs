@@ -191,7 +191,7 @@ fn matches_postcondition(
         Action::Clear => state.value.as_deref().map(str::is_empty),
         Action::TypeText(_) => expected_text
             .zip(state.value.as_deref())
-            .map(|(expected, value)| expected == value),
+            .map(|(expected, value)| crate::value_matches(&state.role, expected, Some(value))),
         Action::Check | Action::Uncheck => {
             checked(observed).map(|value| value == matches!(action, Action::Check))
         }

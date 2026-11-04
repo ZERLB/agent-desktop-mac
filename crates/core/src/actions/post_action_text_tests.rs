@@ -124,3 +124,23 @@ fn keys_that_left_the_field_unchanged_are_not_waited_for_until_the_budget_ends()
     assert!(adapter.reads.lock().unwrap().len() <= 12);
     assert!(clock.elapsed() <= Duration::from_millis(400));
 }
+
+#[test]
+fn typed_text_read_back_with_a_no_break_space_or_crlf_is_verified() {
+    for (requested, observed) in [(" uno", "\u{a0}uno"), ("a\r\nb", "a\nb")] {
+        let mut adapter = typed_by_keys_adapter(observed);
+        adapter.selection = Some(0..0);
+        let result = execute_verified_action(
+            &adapter,
+            &NativeHandle::null(),
+            ActionRequest::headed(Action::TypeText(requested.into())),
+            &InteractionLease::guarded(Deadline::after(1000).unwrap(), ()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            result.disposition(),
+            DeliverySemantics::delivered_verified(),
+            "{requested:?} read back as {observed:?}"
+        );
+    }
+}
