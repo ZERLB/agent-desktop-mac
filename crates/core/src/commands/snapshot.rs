@@ -142,9 +142,13 @@ fn compare_with_baseline(
     context: &CommandContext,
 ) -> Result<Option<Value>, AppError> {
     let store = crate::refs::refs_store::RefStore::for_session(context.session_id())?;
+    let (app, window_id) = match &result.owner {
+        crate::SnapshotOwner::Window(window) => (window.app.as_str(), window.id.as_str()),
+        crate::SnapshotOwner::Application(app) => (app.name.as_str(), ""),
+    };
     let window = crate::tree::tree_diff::DiffWindow {
-        app: &result.window.app,
-        window_id: &result.window.id,
+        app,
+        window_id,
         view: crate::tree::tree_diff::view_of(opts),
         complete: result.complete,
     };
@@ -172,19 +176,18 @@ pub(crate) fn format_snapshot_fields(
 ) -> Result<Value, AppError> {
     let ref_count = result.refmap.len();
     let tree = serde_json::to_value(&result.tree)?;
-    let win = &result.window;
 
     tracing::debug!(refs = ref_count, "tree: snapshot complete");
 
     let mut body = json!({
-        "app": win.app,
+        "app": result.owner.app_name(),
         "ref_count": ref_count,
         "snapshot_id": result.snapshot_id,
         "complete": result.complete,
         "tree": tree
     });
-    if !win.is_process_owner() {
-        body["window"] = json!({ "id": win.id, "title": win.title });
+    if let Some(window) = result.owner.window() {
+        body["window"] = json!({ "id": window.id, "title": window.title });
     }
     if !result.complete {
         body["truncated"] = json!(true);
