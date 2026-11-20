@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 
 use crate::tree::AXElement;
 
+const BACKGROUND_FOCUS_FIRST_WAIT: Duration = Duration::from_millis(300);
 const BACKGROUND_FOCUS_WAIT: Duration = Duration::from_millis(1_000);
 const BACKGROUND_FOCUS_RECHECK: Duration = Duration::from_millis(150);
 
@@ -81,13 +82,13 @@ pub(crate) fn type_text_into_focused_web_control(
     else {
         return Ok(false);
     };
-    if !background_focus_matches(element, pid, deadline, BACKGROUND_FOCUS_WAIT) {
+    let Some(_awake) = focus_in_background(element, pid, deadline) else {
         tracing::debug!(
             pid,
             "keyboard: web control did not take focus; semantic write instead"
         );
         return Ok(false);
-    }
+    };
     if append {
         crate::tree::web_content::move_caret_to_end(element, deadline);
     }
@@ -95,6 +96,26 @@ pub(crate) fn type_text_into_focused_web_control(
         verify_background_delivery_target(element, identity, deadline)
     })?;
     Ok(true)
+}
+
+/// Waits for `element` to hold its application's keyboard focus. A background
+/// application can keep its web content from taking focus until it handles
+/// keys as the active application does, so a control that stays unfocused is
+/// focused again with the application awake. Returns the wake to hold while
+/// the keys are sent, or `None` when the control never took focus.
+fn focus_in_background(
+    element: &AXElement,
+    pid: i32,
+    deadline: Deadline,
+) -> Option<Option<crate::system::window::window_key::KeyboardClaim>> {
+    if background_focus_matches(element, pid, deadline, BACKGROUND_FOCUS_FIRST_WAIT) {
+        return Some(None);
+    }
+    let awake = crate::system::window::window_key::wake(pid, deadline);
+    if awake.is_some() {
+        crate::tree::web_content::focus_text_control(element, deadline);
+    }
+    background_focus_matches(element, pid, deadline, BACKGROUND_FOCUS_WAIT).then_some(awake)
 }
 
 fn verify_background_delivery_target(

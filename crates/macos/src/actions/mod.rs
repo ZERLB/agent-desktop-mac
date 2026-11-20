@@ -20,6 +20,7 @@ mod scroll_web_keys;
 pub(crate) mod select;
 pub(crate) mod toggle_state;
 pub(crate) mod type_text;
+mod web_keyboard;
 
 pub(crate) use delivery_tracker::DeliveryTracker;
 pub(crate) use dispatch::perform_action;

@@ -15,14 +15,71 @@ pub(crate) fn press_for_app_impl(
     policy: InteractionPolicy,
     deadline: Deadline,
 ) -> Result<ActionResult, AdapterError> {
+    let _awake = wake_for_shortcut(&process, combo, policy, deadline);
+    deliver(process, combo, policy, deadline)
+}
+
+fn deliver(
+    process: ProcessIdentity,
+    combo: &KeyCombo,
+    policy: InteractionPolicy,
+    deadline: Deadline,
+) -> Result<ActionResult, AdapterError> {
     press_for_app(process, combo, policy, deadline)
         .map_err(|error| crate::actions::DeliveryTracker::default().annotate(error))
 }
 
-/// Sends `combo` to the process that owns `window` once that window holds the
+/// A background application leaves a shortcut unhandled for seconds, or drops
+/// it, though it takes plain keys at once, so a headless shortcut is sent
+/// while the application handles keys as the active one does.
+fn wake_for_shortcut(
+    process: &ProcessIdentity,
+    combo: &KeyCombo,
+    policy: InteractionPolicy,
+    deadline: Deadline,
+) -> Option<crate::system::window::window_key::KeyboardClaim> {
+    if policy.allow_focus_steal || !is_shortcut(combo) {
+        return None;
+    }
+    let pid = crate::system::process::process_identity::require_core(process)
+        .ok()?
+        .pid();
+    crate::system::window::window_key::wake(pid, deadline)
+}
+
+/// A background application whose web runtime focuses nothing until it is
+/// awake reports no focused element, so a headless key that finds none wakes
+/// the application and looks again before it gives up.
+fn focused_or_awake(
+    app: &AXElement,
+    pid: i32,
+    policy: InteractionPolicy,
+    deadline: Deadline,
+) -> Result<Option<crate::system::window::window_key::KeyboardClaim>, AdapterError> {
+    let Err(error) = require_focused_element(app, policy, deadline) else {
+        return Ok(None);
+    };
+    if policy.allow_focus_steal {
+        return Err(error);
+    }
+    let Some(awake) = crate::system::window::window_key::wake(pid, deadline) else {
+        return Err(error);
+    };
+    require_focused_element(app, policy, deadline)?;
+    Ok(Some(awake))
+}
+
+fn is_shortcut(combo: &KeyCombo) -> bool {
+    combo
+        .modifiers
+        .iter()
+        .any(|modifier| !matches!(modifier, agent_desktop_core::Modifier::Shift))
+}
+
+/// Sends `combo` to the process that owns `window` while that window holds the
 /// application's keyboard. Keys posted to a process reach its key window, so a
-/// window behind a sibling takes the keyboard first when the application is in
-/// the background, and is refused when the application is in front.
+/// window behind a sibling is handed the keyboard for the key and the sibling
+/// gets it back afterwards.
 pub(crate) fn press_for_window_impl(
     window: &WindowInfo,
     combo: &KeyCombo,
@@ -41,15 +98,18 @@ pub(crate) fn press_for_window_impl(
     let pid = crate::system::process::process_identity::require_core(&process)?.pid();
     let element = crate::system::window::window_resolve::window_element_for_info(window, deadline)?;
     let claim = crate::system::window::window_key::claim(&element, pid, deadline)?;
-    if let crate::system::window::window_key::KeyClaim::Refused(cause) = claim {
+    if let Some(cause) = claim.refusal() {
         return Err(crate::system::window::window_key::refusal(
             cause,
             Some(&window.id),
         ));
     }
-    let mut result = press_for_app_impl(process, combo, policy, deadline)?;
-    if claim.made_key() {
-        result.steps.insert(0, semantic_step("AXMain window"));
+    let _awake = (!claim.handed_over())
+        .then(|| wake_for_shortcut(&process, combo, policy, deadline))
+        .flatten();
+    let mut result = deliver(process, combo, policy, deadline)?;
+    if claim.handed_over() {
+        result.steps.insert(0, semantic_step("KeyWindowHandOver"));
     }
     Ok(result)
 }
@@ -89,7 +149,7 @@ fn press_for_app(
         crate::system::focus::verify_app_focused(pid, deadline)?;
     }
     crate::system::process::process_identity::require_core(&process)?;
-    require_focused_element(&app, policy, deadline)?;
+    let _awake = focused_or_awake(&app, pid, policy, deadline)?;
     crate::system::process::process_identity::require_core(&process)?;
     crate::input::keyboard::synthesize_key(combo, Some(pid), deadline)?;
     post_delivery_process_result(

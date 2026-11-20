@@ -5,6 +5,8 @@ pub(crate) mod window_bridge;
 pub(crate) mod window_inventory;
 pub(crate) mod window_inventory_global;
 pub(crate) mod window_key;
+mod window_key_handoff;
+mod window_key_switch;
 pub(crate) mod window_ops;
 pub(crate) mod window_postcondition;
 pub(crate) mod window_report;

@@ -35,10 +35,8 @@ const ARROW_CONSUMING_ROLES: &[&str] = &[
 /// Scrolls web content whose containers publish no scroll mechanism by sending
 /// arrow keys to the owning process, one key per requested unit.
 ///
-/// Process-targeted keys reach the application's key window even while the
-/// application is in the background, so the target's window takes the
-/// keyboard first. In the frontmost application a window behind a sibling
-/// gets no key, because the keys would land in the window the person is in.
+/// Process-targeted keys reach the application's key window, so the target's
+/// window is handed the keyboard for the keys and gives it back afterwards.
 /// Returns whether the target was seen to move.
 pub(crate) fn scroll_with_keys(
     element: &AXElement,
@@ -53,7 +51,7 @@ pub(crate) fn scroll_with_keys(
             "Could not read the process that owns the scroll target",
         )
     })?;
-    ensure_key_window(element, pid, deadline)?;
+    let keyboard = claim_keyboard(element, pid, deadline)?;
     focus_scroll_context(element, web_area, deadline)?;
     let before = bounds(element, deadline).ok().flatten();
     let combo = KeyCombo {
@@ -66,6 +64,7 @@ pub(crate) fn scroll_with_keys(
             .map_err(|error| delivery.annotate(error))?;
         delivery.mark_delivered();
     }
+    drop(keyboard);
     Ok(settled_move(element, before, direction, deadline))
 }
 
@@ -89,14 +88,14 @@ pub(crate) fn enclosing_web_area(
     Ok(None)
 }
 
-fn ensure_key_window(
+fn claim_keyboard(
     element: &AXElement,
     pid: i32,
     deadline: Deadline,
-) -> Result<(), AdapterError> {
-    let claim = crate::system::window::window_key::claim_for_element(element, pid, deadline)?;
-    let crate::system::window::window_key::KeyClaim::Refused(cause) = claim else {
-        return Ok(());
+) -> Result<crate::system::window::window_key::KeyboardClaim, AdapterError> {
+    let claim = crate::actions::web_keyboard::claim(element, pid, deadline)?;
+    let Some(cause) = claim.refusal() else {
+        return Ok(claim);
     };
     Err(AdapterError::new(
         ErrorCode::ActionNotSupported,
@@ -109,8 +108,8 @@ fn ensure_key_window(
     }))
     .with_disposition(DeliverySemantics::not_delivered())
     .with_suggestion(
-        "Run 'scroll-to' on the element you want to see: it scrolls a background window without keys. \
-         Or retry with --headed to bring this window forward.",
+        "Run 'scroll-to' on the element you want to see: it scrolls any window without keys. \
+         Or retry in a moment if the person was typing.",
     ))
 }
 
@@ -139,11 +138,14 @@ fn focus_scroll_context(
     Ok(())
 }
 
+/// Only a runtime that focuses its content inside a background application
+/// takes the focus write; any other would bring its application forward.
 fn focus(element: &AXElement, deadline: Deadline) -> bool {
-    matches!(
-        crate::actions::ax_helpers::set_ax_bool_or_err(element, "AXFocused", true, deadline),
-        Ok(true)
-    )
+    crate::tree::web_content::focuses_in_background(element, deadline)
+        && matches!(
+            crate::actions::ax_helpers::set_ax_bool_or_err(element, "AXFocused", true, deadline),
+            Ok(true)
+        )
 }
 
 fn bounds(element: &AXElement, deadline: Deadline) -> Result<Option<Rect>, AdapterError> {

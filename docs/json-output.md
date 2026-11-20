@@ -199,19 +199,19 @@ A `snapshot`, `find` or `screenshot` that names `--app` without `--window-id` on
 }
 ```
 
-On macOS a key posted to a process reaches its key window. A `press` whose window does not hold the keyboard and cannot take it without disturbing the person fails with `ACTION_NOT_SUPPORTED`, `disposition.delivery: not_delivered` and:
+On macOS a key posted to a process reaches its key window, so a `press` whose window does not hold the keyboard is handed it for the key and reports the step `KeyWindowHandOver`. A `press` that cannot be handed the keyboard without disturbing the person fails with `ACTION_NOT_SUPPORTED`, `disposition.delivery: not_delivered` and:
 
 ```json
 "details": {
   "kind": "window_not_key",
   "check": "window_active",
-  "cause": "sibling_window_holds_keyboard",
+  "cause": "person_is_typing",
   "window_id": "w-6758",
   "physical_delivery_started": false
 }
 ```
 
-`cause` is `sibling_window_holds_keyboard` when the application is frontmost with another window active, `application_hidden`, `window_minimized`, or `main_window_write_refused` and `main_window_not_observed` when the application did not accept the change.
+`cause` is `person_is_typing` when the application is frontmost and the person kept using the keyboard or a mouse button, `application_hidden`, `window_minimized`, `transient_window_holds_keyboard` when a dialog of the frontmost application holds the keyboard, `hand_over_not_observed` when the application did not move its key window, `window_has_no_number`, or `sibling_window_holds_keyboard` when the hand-over is unavailable or turned off with `AGENT_DESKTOP_KEY_HANDOFF=off`. Key-driven `scroll` reports the same causes under `kind: web_scroll_window_not_key`.
 
 ## Screenshot of a window that is not on screen
 

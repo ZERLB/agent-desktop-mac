@@ -35,9 +35,9 @@ pub(crate) fn execute_type(
             .with_mechanism(StepMechanism::PhysicalSynthetic)
             .with_verified(false));
     }
-    let web_caret = crate::tree::web_content::focus_web_text_control_for_typing(element, deadline);
-    let web = web_caret.is_some();
-    let append = web_caret == Some(false);
+    let web = crate::tree::web_content::is_inside_web_area(element, deadline);
+    let _keyboard = web.then(|| claim_keyboard(element, deadline)).flatten();
+    let append = web && !crate::tree::web_content::focus_text_control_for_typing(element, deadline);
     if web
         && crate::actions::physical_keyboard::type_text_into_focused_web_control(
             element,
@@ -84,6 +84,19 @@ pub(crate) fn execute_type(
         return Err(error);
     }
     Ok(semantic_step("AXValue"))
+}
+
+/// Typed web text arrives as keys posted to the process, which reach its key
+/// window, so the control's window holds the keyboard while the text is sent.
+/// Best effort: without the keyboard the control does not take the
+/// application's focus and the text is written semantically instead.
+fn claim_keyboard(
+    element: &AXElement,
+    deadline: Deadline,
+) -> Option<crate::system::window::window_key::KeyboardClaim> {
+    let pid =
+        crate::system::app::app_ops::pid_from_element(element, deadline).filter(|pid| *pid > 0)?;
+    crate::actions::web_keyboard::claim(element, pid, deadline).ok()
 }
 
 fn semantic_step(label: &'static str) -> ActionStep {

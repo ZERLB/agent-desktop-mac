@@ -37,6 +37,26 @@ pub(crate) fn is_inside_web_area(element: &AXElement, deadline: Deadline) -> boo
     false
 }
 
+/// Whether the web runtime behind `element` focuses its content inside a
+/// background application on its own. Chromium does, and marks every node it
+/// publishes. Other runtimes focus only while the application handles keys as
+/// the active one does, and WebKit brings the application forward otherwise.
+#[cfg(target_os = "macos")]
+pub(crate) fn focuses_in_background(element: &AXElement, deadline: Deadline) -> bool {
+    use core_foundation::base::TCFType;
+
+    let marker = core_foundation::string::CFString::new("ChromeAXNodeId");
+    let (error, value) = super::properties::ax_ipc::copy_attribute_value(
+        element,
+        marker.as_concrete_TypeRef(),
+        deadline,
+    );
+    if !value.is_null() {
+        unsafe { core_foundation::base::CFRelease(value) };
+    }
+    error == accessibility_sys::kAXErrorSuccess
+}
+
 /// Moves keyboard focus to a web text control inside its own application, without
 /// activating the application. Returns whether the element is web content, so the
 /// caller knows the web fallbacks apply even when the focus write was refused.
@@ -45,42 +65,38 @@ pub(crate) fn focus_web_text_control(element: &AXElement, deadline: Deadline) ->
     if !is_inside_web_area(element, deadline) {
         return false;
     }
-    let _ = crate::actions::ax_helpers::set_ax_bool_or_err(element, "AXFocused", true, deadline);
+    focus_text_control(element, deadline);
     true
 }
 
-/// Focuses a web text control for typing, inside its own application, as
-/// `focus_web_text_control` does. Returns `None` for a control outside web content, and
-/// otherwise whether the control already held focus with its caret moved off the start
-/// or text selected, the one case where typed text should land at the caret.
+/// Focuses a web text control the way its runtime takes it without coming
+/// forward. Chromium takes an `AXFocused` write inside a background
+/// application. WebKit answers that write by bringing its application forward,
+/// so any other runtime is pressed instead: a press on a text control only
+/// focuses it.
 #[cfg(target_os = "macos")]
-pub(crate) fn focus_web_text_control_for_typing(
-    element: &AXElement,
-    deadline: Deadline,
-) -> Option<bool> {
-    if !is_inside_web_area(element, deadline) {
-        return None;
+pub(crate) fn focus_text_control(element: &AXElement, deadline: Deadline) {
+    let pressed = !focuses_in_background(element, deadline)
+        && crate::actions::ax_helpers::try_ax_action_or_err(element, "AXPress", deadline)
+            .unwrap_or(false);
+    if !pressed {
+        let _ =
+            crate::actions::ax_helpers::set_ax_bool_or_err(element, "AXFocused", true, deadline);
     }
+}
+
+/// Focuses a web text control for typing, inside its own application, as
+/// `focus_web_text_control` does. Returns whether the control already held focus with
+/// its caret moved off the start or text selected, the one case where typed text
+/// should land at the caret. The caller has established that it is web content.
+#[cfg(target_os = "macos")]
+pub(crate) fn focus_text_control_for_typing(element: &AXElement, deadline: Deadline) -> bool {
     let placed_caret = holds_placed_caret(
         super::copy_bool_attr(element, "AXFocused", deadline) == Some(true),
         super::properties::attributes::selected_text_range(element, deadline),
     );
-    claim_keyboard(element, deadline);
-    let _ = crate::actions::ax_helpers::set_ax_bool_or_err(element, "AXFocused", true, deadline);
-    Some(placed_caret)
-}
-
-/// Typed web text arrives as keys posted to the process, which reach its key
-/// window, so the control's window takes the keyboard before the control is
-/// focused. Best effort: after a refused claim the control does not take the
-/// application's focus and the caller writes the text semantically instead.
-#[cfg(target_os = "macos")]
-fn claim_keyboard(element: &AXElement, deadline: Deadline) {
-    if let Some(pid) =
-        crate::system::app::app_ops::pid_from_element(element, deadline).filter(|pid| *pid > 0)
-    {
-        let _ = crate::system::window::window_key::claim_for_element(element, pid, deadline);
-    }
+    focus_text_control(element, deadline);
+    placed_caret
 }
 
 /// True when a web text control is being edited: it holds focus and its caret was moved
