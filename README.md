@@ -79,6 +79,8 @@ Each command prints one JSON envelope. A trimmed snapshot:
 - `type`, `set-value`, and `clipboard-set` accept `--stdin` for piped text, keeping it out of process arguments. Run secret steps as separate commands; batch JSON text appears in process arguments.
 - **PowerShell.** Quote every ref (`'@s8f3k2p9:e8'`), because a bare `@token` is the splatting operator.
 
+On macOS, an `AXTable` snapshot includes rows currently exposed through its visible-row accessibility attribute. When the table has more rows, `data.complete` is `false` and the table's `children_count` reports the total. Scroll the table and take another snapshot to inspect a different range.
+
 The full walkthrough is in the [quick start](https://agent-browser.dev/desktop/quick-start).
 
 ## How it works

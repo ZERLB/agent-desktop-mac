@@ -63,6 +63,7 @@ pub(super) fn read_first_nonempty(
     }
     ChildRead {
         elements: Vec::new(),
+        source_index_offset: None,
         total_count,
         complete: prefix_certain,
         source_availability: if any_available {
@@ -88,6 +89,7 @@ mod tests {
                 .then(|| AXElement(std::ptr::null_mut()))
                 .into_iter()
                 .collect(),
+            source_index_offset: None,
             total_count: count,
             complete,
             source_availability: availability,
