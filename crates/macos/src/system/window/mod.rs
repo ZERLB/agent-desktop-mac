@@ -1,3 +1,4 @@
+pub(crate) mod app_front_guard;
 pub(crate) mod cg_window;
 pub(crate) mod cg_window_cover;
 pub(crate) mod cg_window_exact;

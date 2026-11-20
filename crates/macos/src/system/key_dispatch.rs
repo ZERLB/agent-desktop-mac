@@ -6,6 +6,8 @@ use std::time::{Duration, Instant};
 
 use crate::tree::AXElement;
 
+#[path = "key_dispatch_front.rs"]
+mod front;
 #[path = "key_dispatch_menu.rs"]
 mod menu;
 
@@ -15,40 +17,12 @@ pub(crate) fn press_for_app_impl(
     policy: InteractionPolicy,
     deadline: Deadline,
 ) -> Result<ActionResult, AdapterError> {
-    let front = front_guard(&process, combo, policy, deadline);
+    let front = front::watch(&process, combo, policy, deadline);
     let result = {
         let _awake = wake_for_shortcut(&process, combo, policy, deadline);
         deliver(process, combo, policy, deadline)
     };
-    keep_person_in_front(front, result)
-}
-
-/// A headless shortcut can open a new window, which would come up in front of
-/// the window the person is using when they are in the same application.
-fn front_guard(
-    process: &ProcessIdentity,
-    combo: &KeyCombo,
-    policy: InteractionPolicy,
-    deadline: Deadline,
-) -> Option<crate::system::window::window_front_guard::FrontWindowGuard> {
-    if policy.allow_focus_steal || !is_shortcut(combo) {
-        return None;
-    }
-    let pid = crate::system::process::process_identity::require_core(process)
-        .ok()?
-        .pid();
-    crate::system::window::window_front_guard::watch(pid, deadline)
-}
-
-fn keep_person_in_front(
-    front: Option<crate::system::window::window_front_guard::FrontWindowGuard>,
-    result: Result<ActionResult, AdapterError>,
-) -> Result<ActionResult, AdapterError> {
-    let mut result = result?;
-    if front.is_some_and(|front| front.restore()) {
-        result.steps.push(semantic_step("PersonWindowKeptInFront"));
-    }
-    Ok(result)
+    front::keep(front, result)
 }
 
 fn deliver(
@@ -129,13 +103,13 @@ pub(crate) fn press_for_window_impl(
     let process = ProcessIdentity::new(window.pid, instance);
     crate::system::process::process_identity::require_core(&process)?;
     let element = crate::system::window::window_resolve::window_element_for_info(window, deadline)?;
-    let front = front_guard(&process, combo, policy, deadline);
+    let front = front::watch(&process, combo, policy, deadline);
     let target = TargetWindow {
         element: &element,
         id: &window.id,
     };
     let result = press_in_claimed_window(target, process, combo, policy, deadline);
-    keep_person_in_front(front, result)
+    front::keep(front, result)
 }
 
 struct TargetWindow<'a> {

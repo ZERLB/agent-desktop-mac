@@ -38,7 +38,7 @@ pub(crate) fn launch_app_impl(
     }
     let target = launch_target(options, initial).map_err(before_launch)?;
 
-    let launched = crate::system::launch_workspace::open(id, options, deadline)?;
+    let (launched, _front) = crate::system::launch_front::open(id, options, deadline)?;
     validate_launched_target(&target, &launched).map_err(after_launch)?;
     let window =
         settled_window(launched.0, &launched.1, options, deadline).map_err(after_launch)?;

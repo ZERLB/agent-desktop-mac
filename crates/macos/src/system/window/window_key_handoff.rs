@@ -30,11 +30,14 @@ const EVENT_KEY_DOWN: u32 = 10;
 const EVENT_FLAGS_CHANGED: u32 = 12;
 const PRIMARY_MOUSE_BUTTON: u32 = 0;
 const SECONDARY_MOUSE_BUTTON: u32 = 1;
+const FRONT_AS_THE_PERSON_CHOSE: u32 = 0x200;
 
 type Record = [u8; RECORD_LEN];
 type PostEventRecord = unsafe extern "C" fn(*const ProcessSerial, *const u8) -> i32;
 type ProcessForPid = unsafe extern "C" fn(i32, *mut ProcessSerial) -> i32;
 type FrontProcess = unsafe extern "C" fn(*mut ProcessSerial) -> i32;
+type ProcessPid = unsafe extern "C" fn(*const ProcessSerial, *mut i32) -> i32;
+type SetFrontProcess = unsafe extern "C" fn(*const ProcessSerial, u32, u32) -> i32;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -48,6 +51,8 @@ struct Bridge {
     post: PostEventRecord,
     process_for_pid: ProcessForPid,
     front_process: Option<FrontProcess>,
+    process_pid: Option<ProcessPid>,
+    set_front_process: Option<SetFrontProcess>,
 }
 
 /// Whether this system offers the hand-over at all.
@@ -103,6 +108,32 @@ pub(crate) fn is_front_process(pid: i32) -> Option<bool> {
     answered.then_some(front == asked)
 }
 
+/// The process the window server has in front, or `None` when this system
+/// does not offer the question.
+pub(crate) fn front_pid() -> Option<i32> {
+    let bridge = bridge()?;
+    let (front_process, process_pid) = (bridge.front_process?, bridge.process_pid?);
+    let mut front = ProcessSerial::default();
+    let mut pid = 0;
+    let answered =
+        unsafe { front_process(&mut front) } == 0 && unsafe { process_pid(&front, &mut pid) } == 0;
+    (answered && pid > 0).then_some(pid)
+}
+
+/// Puts process `pid` in front with `window` as its front window, the way the
+/// window server does when the person picks that window. Returns whether the
+/// request was accepted; the caller observes the result.
+pub(crate) fn bring_forward(pid: i32, window: u32) -> bool {
+    let Some((bridge, set_front_process)) =
+        bridge().and_then(|bridge| Some((bridge, bridge.set_front_process?)))
+    else {
+        return false;
+    };
+    let mut serial = ProcessSerial::default();
+    let known = unsafe { (bridge.process_for_pid)(pid, &mut serial) } == 0;
+    known && unsafe { set_front_process(&serial, window, FRONT_AS_THE_PERSON_CHOSE) } == 0
+}
+
 /// How long ago the person last used the physical keyboard, or `None` while a
 /// mouse button is held, which is a drag or a press in progress.
 pub(crate) fn person_idle_for() -> Option<Duration> {
@@ -152,12 +183,18 @@ fn bridge() -> Option<Bridge> {
         let process_for_pid = symbol(services, c"GetProcessForPID")?;
         let front_process = symbol(window_server, c"_SLPSGetFrontProcess")
             .map(|symbol| unsafe { std::mem::transmute::<*mut c_void, FrontProcess>(symbol) });
+        let process_pid = symbol(services, c"GetProcessPID")
+            .map(|symbol| unsafe { std::mem::transmute::<*mut c_void, ProcessPid>(symbol) });
+        let set_front_process = symbol(window_server, c"_SLPSSetFrontProcessWithOptions")
+            .map(|symbol| unsafe { std::mem::transmute::<*mut c_void, SetFrontProcess>(symbol) });
         Some(Bridge {
             post: unsafe { std::mem::transmute::<*mut c_void, PostEventRecord>(post) },
             process_for_pid: unsafe {
                 std::mem::transmute::<*mut c_void, ProcessForPid>(process_for_pid)
             },
             front_process,
+            process_pid,
+            set_front_process,
         })
     })
 }
