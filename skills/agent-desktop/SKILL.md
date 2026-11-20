@@ -60,7 +60,7 @@ agent-desktop snapshot --root @s8f3k2p9:e3 -i --compact        # verify: re-read
 
 ## Windows
 
-`--app` without `--window-id` targets the app's focused window; with several windows and none focused it returns `AMBIGUOUS_TARGET`. Once you snapshot a window, `snapshot`, `find`, `screenshot` and `press` that name only `--app` keep using that window, per `--session` and `--agent-id`, while it exists, even when the user brings another window of the same app to the front. `snapshot` and `press` say so in `data.window_affinity` when the kept window is not the focused one. Pass `--window-id` to switch, for example to a window your own action opened.
+`--app` without `--window-id` targets the app's focused window; with several windows and none focused it returns `AMBIGUOUS_TARGET`. Once you snapshot a window, `snapshot`, `find`, `screenshot` and `press` that name only `--app` keep using that window, per `--session` and `--agent-id`, while it exists, even when the user brings another window of the same app to the front. `snapshot` and `press` say so in `data.window_affinity` when the kept window is not the focused one. Pass `--window-id` to switch, for example to a window your own action opened. Work behind the user's window: `launch <app>` without `--activate` opens the app behind the active window and takes no focus, and headless commands never bring a window forward. Use `focus-window`, `--activate` or `--headed` only when the task needs the screen.
 
 ## Delivery and retry
 

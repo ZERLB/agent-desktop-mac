@@ -15,8 +15,40 @@ pub(crate) fn press_for_app_impl(
     policy: InteractionPolicy,
     deadline: Deadline,
 ) -> Result<ActionResult, AdapterError> {
-    let _awake = wake_for_shortcut(&process, combo, policy, deadline);
-    deliver(process, combo, policy, deadline)
+    let front = front_guard(&process, combo, policy, deadline);
+    let result = {
+        let _awake = wake_for_shortcut(&process, combo, policy, deadline);
+        deliver(process, combo, policy, deadline)
+    };
+    keep_person_in_front(front, result)
+}
+
+/// A headless shortcut can open a new window, which would come up in front of
+/// the window the person is using when they are in the same application.
+fn front_guard(
+    process: &ProcessIdentity,
+    combo: &KeyCombo,
+    policy: InteractionPolicy,
+    deadline: Deadline,
+) -> Option<crate::system::window::window_front_guard::FrontWindowGuard> {
+    if policy.allow_focus_steal || !is_shortcut(combo) {
+        return None;
+    }
+    let pid = crate::system::process::process_identity::require_core(process)
+        .ok()?
+        .pid();
+    crate::system::window::window_front_guard::watch(pid, deadline)
+}
+
+fn keep_person_in_front(
+    front: Option<crate::system::window::window_front_guard::FrontWindowGuard>,
+    result: Result<ActionResult, AdapterError>,
+) -> Result<ActionResult, AdapterError> {
+    let mut result = result?;
+    if front.is_some_and(|front| front.restore()) {
+        result.steps.push(semantic_step("PersonWindowKeptInFront"));
+    }
+    Ok(result)
 }
 
 fn deliver(
@@ -95,13 +127,35 @@ pub(crate) fn press_for_window_impl(
                 .with_disposition(DeliverySemantics::not_delivered())
         })?;
     let process = ProcessIdentity::new(window.pid, instance);
-    let pid = crate::system::process::process_identity::require_core(&process)?.pid();
+    crate::system::process::process_identity::require_core(&process)?;
     let element = crate::system::window::window_resolve::window_element_for_info(window, deadline)?;
-    let claim = crate::system::window::window_key::claim(&element, pid, deadline)?;
+    let front = front_guard(&process, combo, policy, deadline);
+    let target = TargetWindow {
+        element: &element,
+        id: &window.id,
+    };
+    let result = press_in_claimed_window(target, process, combo, policy, deadline);
+    keep_person_in_front(front, result)
+}
+
+struct TargetWindow<'a> {
+    element: &'a AXElement,
+    id: &'a str,
+}
+
+fn press_in_claimed_window(
+    target: TargetWindow<'_>,
+    process: ProcessIdentity,
+    combo: &KeyCombo,
+    policy: InteractionPolicy,
+    deadline: Deadline,
+) -> Result<ActionResult, AdapterError> {
+    let pid = crate::system::process::process_identity::require_core(&process)?.pid();
+    let claim = crate::system::window::window_key::claim(target.element, pid, deadline)?;
     if let Some(cause) = claim.refusal() {
         return Err(crate::system::window::window_key::refusal(
             cause,
-            Some(&window.id),
+            Some(target.id),
         ));
     }
     let _awake = (!claim.handed_over())
