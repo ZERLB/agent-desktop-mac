@@ -187,3 +187,21 @@ fn visible_without_bounds_agrees_with_the_visibility_gate_for_every_state() {
         }
     }
 }
+
+#[test]
+fn scroll_delegates_to_the_container_of_an_element_that_scrolls_into_view() {
+    let request = ActionRequest::headless(Action::Scroll(crate::Direction::Down, 1));
+    let mut target = evidence(Some(false), None);
+    target.available_actions = vec![crate::actions::capability::SCROLL_TO.into()];
+    assert_eq!(
+        super::action_supported(&target, &request).status,
+        ActionabilityStatus::Pass
+    );
+
+    target.available_actions = vec![crate::actions::capability::SET_FOCUS.into()];
+    assert_ne!(
+        super::action_supported(&target, &request).status,
+        ActionabilityStatus::Pass,
+        "an element with neither scroll capability is still refused"
+    );
+}

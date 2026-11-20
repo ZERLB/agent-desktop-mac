@@ -61,7 +61,7 @@ mod imp {
                         "Target has no ancestor to scroll",
                     ))
                 })?;
-            crate::actions::scroll::ax_scroll(
+            crate::actions::scroll::ax_scroll_semantic(
                 &parent,
                 &direction,
                 1,

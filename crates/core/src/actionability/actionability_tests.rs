@@ -334,7 +334,7 @@ fn command_aliases_match_platform_capabilities() {
             &scrollable,
             &ActionRequest::headless(Action::Scroll(Direction::Down, 1))
         )
-        .is_err()
+        .is_ok()
     );
     assert!(check(&scrollable, &ActionRequest::headless(Action::ScrollTo)).is_ok());
 }

@@ -178,6 +178,9 @@ pub(super) fn action_supported(
     if matches!(request.action, Action::Select(_)) && combo_select_applies(evidence) {
         return pass("supported_action");
     }
+    if scrolls_through_container(evidence, request) {
+        return pass("supported_action");
+    }
     if capability::contains_any(
         &evidence.available_actions,
         capability::for_action(&request.action),
@@ -200,6 +203,14 @@ pub(super) fn action_supported(
         format!("{expected} is not available"),
         ErrorCode::ActionNotSupported,
     )
+}
+
+/// An element that can be scrolled into view lives inside a scroll container,
+/// and the adapter scrolls that container on the element's behalf: web pages
+/// publish the scroll capability on no element a snapshot can reference.
+fn scrolls_through_container(evidence: &ActionabilityEvidence, request: &ActionRequest) -> bool {
+    matches!(request.action, Action::Scroll(_, _))
+        && capability::contains_any(&evidence.available_actions, &[capability::SCROLL_TO])
 }
 
 pub(super) fn policy(request: &ActionRequest) -> ActionabilityCheck {

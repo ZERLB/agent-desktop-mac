@@ -6,6 +6,9 @@ use crate::tree::AXElement;
 
 const MAX_SCROLL_AMOUNT: u32 = 1_000;
 
+/// Scrolls through the element's published scroll mechanism and, for web
+/// content that publishes none, through arrow keys sent to the key window
+/// that holds it.
 pub(crate) fn ax_scroll(
     element: &AXElement,
     direction: &Direction,
@@ -13,40 +16,81 @@ pub(crate) fn ax_scroll(
     policy: InteractionPolicy,
     deadline: Deadline,
 ) -> Result<(StepMechanism, bool), AdapterError> {
+    if let Some(outcome) = semantic_scroll(element, direction, amount, policy, deadline)? {
+        return Ok(outcome);
+    }
+    let Some(web_area) = crate::actions::scroll_web_keys::enclosing_web_area(element, deadline)?
+    else {
+        return Err(inert_scroll_error());
+    };
+    if let Some(container) = crate::actions::scroll_read::element(&web_area, "AXParent", deadline)?
+        && let Some(outcome) = semantic_scroll(&container, direction, amount, policy, deadline)?
+    {
+        return Ok(outcome);
+    }
+    let verified = crate::actions::scroll_web_keys::scroll_with_keys(
+        element, &web_area, direction, amount, deadline,
+    )?;
+    Ok((StepMechanism::PhysicalSynthetic, verified))
+}
+
+/// Scrolls only through published scroll mechanisms and never sends keys, so
+/// it stays safe for windows that are not their application's key window.
+pub(crate) fn ax_scroll_semantic(
+    element: &AXElement,
+    direction: &Direction,
+    amount: u32,
+    policy: InteractionPolicy,
+    deadline: Deadline,
+) -> Result<(StepMechanism, bool), AdapterError> {
+    semantic_scroll(element, direction, amount, policy, deadline)?.ok_or_else(inert_scroll_error)
+}
+
+fn semantic_scroll(
+    element: &AXElement,
+    direction: &Direction,
+    amount: u32,
+    policy: InteractionPolicy,
+    deadline: Deadline,
+) -> Result<Option<(StepMechanism, bool)>, AdapterError> {
     validate_amount(amount)?;
     let scroll_area = find_scroll_area(element, deadline)?;
     let target = scroll_area.as_ref().unwrap_or(element);
     if policy.is_headed() {
         physical_wheel(target, direction, amount, deadline)?;
-        return Ok((StepMechanism::PhysicalSynthetic, false));
+        return Ok(Some((StepMechanism::PhysicalSynthetic, false)));
     }
     let (bar_attribute, increment_action) = scroll_bar_action(direction);
 
     if let Some(bar) = crate::actions::scroll_read::element(target, bar_attribute, deadline)? {
         if perform_repeated_action(&bar, increment_action, amount, deadline)? {
-            return Ok((StepMechanism::SemanticApi, false));
+            return Ok(Some((StepMechanism::SemanticApi, false)));
         }
         if try_value_shift(&bar, direction, amount, deadline)? {
-            return Ok((StepMechanism::SemanticApi, true));
+            return Ok(Some((StepMechanism::SemanticApi, true)));
         }
         if try_sub_elements(&bar, direction, amount, deadline)? {
-            return Ok((StepMechanism::SemanticApi, false));
+            return Ok(Some((StepMechanism::SemanticApi, false)));
         }
     }
     if perform_repeated_action(target, page_action(direction), amount, deadline)? {
-        return Ok((StepMechanism::SemanticApi, false));
+        return Ok(Some((StepMechanism::SemanticApi, false)));
     }
-    Err(AdapterError::new(
+    Ok(None)
+}
+
+fn inert_scroll_error() -> AdapterError {
+    AdapterError::new(
         ErrorCode::ActionNotSupported,
-        "Element advertises Scroll but no scroll mechanism moved its content",
+        "No scroll mechanism moved this element's content",
     )
     .with_details(serde_json::json!({
         "kind": "scroll_advertised_but_inert",
     }))
     .with_suggestion(
-        "The application publishes the scroll actions without implementing them. \
-         Try the parent container, or use '--headed' for a physical wheel scroll.",
-    ))
+        "The application publishes no working scroll action here. Try the parent container, \
+         run 'scroll-to' on the element you want to see, or use '--headed' for a physical wheel scroll.",
+    )
 }
 
 fn validate_amount(amount: u32) -> Result<(), AdapterError> {
