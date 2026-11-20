@@ -57,6 +57,17 @@ python3 -I zerlb/banco/controles.py "Google Chrome for Testing" --bin target/rel
 
 Resultado del 20-nov-2026 en Chrome for Testing, con la ventana atrás: la versión anterior, 1 de 3 (`select` daba `TIMEOUT` a los 5 s y `set-value` no movía el deslizador); con esta copia, 3 de 3.
 
+**Probar sin quitarle la pantalla a la persona.** Dos sondas en Swift ayudan cuando alguien está usando el Mac durante las pruebas:
+
+```sh
+swiftc -O zerlb/herramientas/vigia_frente.swift -o /tmp/vigia_frente
+swiftc -O zerlb/herramientas/esperar_ocioso.swift -o /tmp/esperar_ocioso
+/tmp/vigia_frente 8 > /tmp/frente.log &          # anota cada cambio de la app al frente
+/tmp/esperar_ocioso 2 && agent-desktop press --app "Google Chrome for Testing" cmd+n
+```
+
+`vigia_frente` anota cada cambio de la app al frente con su tiempo; `esperar_ocioso` espera a que la persona lleve unos segundos sin teclear ni hacer clic. Así se midió el 20-nov-2026 que un Chrome en segundo plano se pone al frente con cada ventana nueva: sin protección se quedó ahí 2,8 s; con esta copia, 6 a 13 ms, y la respuesta lo dice con el paso `PersonAppKeptInFront`.
+
 `recorrido.py` imprime cada paso con el método que funcionó, lo que se leyó después, cuánto tardó, y si el puntero o la app al frente cambiaron. Resultado con esta copia (2-nov-2026, macOS 26, sin modo físico): 12 de 12 pasos en Safari, Microsoft Edge y Chrome for Testing, con el puntero quieto; en Chrome for Testing también con la ventana en segundo plano. Con el original 1.0.2, en el mismo banco: 11 de 12 en Chrome for Testing (falla la lista) y 8 de 12 en Safari (fallan la lista y los tres campos de texto).
 
 ## Apps probadas
