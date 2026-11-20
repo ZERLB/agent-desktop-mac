@@ -146,3 +146,22 @@ fn a_ref_without_a_token_keeps_the_attribute_path() {
 
     assert!(resolve_saved_token(&stored, deadline).unwrap().is_none());
 }
+
+#[test]
+fn an_element_of_the_expected_process_never_asks_for_its_host() {
+    let pid = super::owning_pid(41, Some(41), || panic!("the host is not needed"));
+
+    assert_eq!(pid, 41);
+}
+
+#[test]
+fn a_helper_drawn_element_counts_for_the_process_that_hosts_its_window() {
+    assert_eq!(super::owning_pid(77, Some(41), || vec![77, 41]), 41);
+}
+
+#[test]
+fn an_element_hosted_elsewhere_or_nowhere_keeps_its_own_pid() {
+    assert_eq!(super::owning_pid(77, Some(41), || vec![90]), 77);
+    assert_eq!(super::owning_pid(77, Some(41), Vec::new), 77);
+    assert_eq!(super::owning_pid(77, None, || vec![41]), 77);
+}

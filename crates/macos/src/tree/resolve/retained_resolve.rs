@@ -7,6 +7,9 @@ use super::retained::{TokenLookup, resolve_token};
 #[cfg(target_os = "macos")]
 use crate::tree::AXElement;
 
+#[cfg(target_os = "macos")]
+const MAX_HOST_ANCESTRY: usize = 64;
+
 /// Why a saved retained object no longer designates the element it was captured from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::tree) enum RetainedMismatch {
@@ -63,8 +66,10 @@ fn verify_token_element(
     element: &AXElement,
     deadline: std::time::Instant,
 ) -> Result<(), AdapterError> {
-    let pid = crate::tree::properties::ax_ipc::pid(element, deadline)
+    let own_pid = crate::tree::properties::ax_ipc::pid(element, deadline)
         .map_err(|error| token_read_error(entry, error))?;
+    let expected_pid = crate::system::process::process_identity::to_pid_t(entry.process.pid).ok();
+    let pid = owning_pid(own_pid, expected_pid, || hosting_pids(element, deadline));
     let read = |attribute| {
         super::resolve_ax_read::read_string(element, attribute, deadline)
             .map_err(|error| destroyed_as_stale(entry, error))
@@ -90,6 +95,46 @@ fn verify_token_element(
         return Err(stale_token_error(entry, mismatch));
     }
     Ok(())
+}
+
+/// The process an element counts for. A panel that another process draws
+/// inside an application's window, such as the open and save panel, publishes
+/// elements with that helper's pid, so an element whose own pid differs counts
+/// for the expected process when that process owns the window it sits in.
+pub(in crate::tree) fn owning_pid(
+    own_pid: i32,
+    expected_pid: Option<i32>,
+    hosting_pids: impl FnOnce() -> Vec<i32>,
+) -> i32 {
+    match expected_pid {
+        Some(expected) if expected != own_pid && hosting_pids().contains(&expected) => expected,
+        _ => own_pid,
+    }
+}
+
+/// The processes that serve the ancestors of an element. A panel drawn by a
+/// helper has no window of its own in accessibility: its ancestors change
+/// process where the application's sheet or window takes over.
+#[cfg(target_os = "macos")]
+fn hosting_pids(element: &AXElement, deadline: std::time::Instant) -> Vec<i32> {
+    let mut pids = Vec::new();
+    let mut current = crate::tree::surface_read::element(element, "AXParent", deadline)
+        .ok()
+        .flatten();
+    for _ in 0..MAX_HOST_ANCESTRY {
+        let Some(ancestor) = current else {
+            break;
+        };
+        if let Ok(pid) = crate::tree::properties::ax_ipc::pid(&ancestor, deadline)
+            && !pids.contains(&pid)
+        {
+            pids.push(pid);
+        }
+        current = crate::tree::surface_read::element(&ancestor, "AXParent", deadline)
+            .ok()
+            .flatten();
+    }
+    pids
 }
 
 #[cfg(target_os = "macos")]
