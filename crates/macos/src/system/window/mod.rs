@@ -1,4 +1,5 @@
 pub(crate) mod cg_window;
+pub(crate) mod cg_window_cover;
 pub(crate) mod cg_window_exact;
 pub(crate) mod window_ax_state;
 pub(crate) mod window_bridge;

@@ -143,6 +143,7 @@ pub fn execute(
         },
     )?;
     let affinity_note = remember_window(&result, &args, kept.as_ref(), context);
+    let covered_note = covered_note(&result, adapter);
 
     let diff = compare_with_baseline(&result, &opts, args.diff_from.as_deref(), context)?;
     let mut body = format_result(result)?;
@@ -152,7 +153,29 @@ pub fn execute(
     if let Some(note) = affinity_note {
         body["window_affinity"] = note;
     }
+    if let Some(note) = covered_note {
+        body["window_covered"] = note;
+    }
     Ok(body)
+}
+
+/// Says that the window is completely behind another one. A web page that
+/// loads there publishes little or none of its content, which reads as a
+/// nearly empty window and not as an error.
+fn covered_note(result: &snapshot::SnapshotResult, adapter: &dyn PlatformAdapter) -> Option<Value> {
+    let crate::SnapshotOwner::Window(window) = &result.owner else {
+        return None;
+    };
+    covered_note_for(adapter.window_is_covered(window))
+}
+
+fn covered_note_for(covered: Option<bool>) -> Option<Value> {
+    (covered == Some(true)).then(|| {
+        serde_json::json!({
+            "covered": true,
+            "note": "Another window covers this window completely. A web page that loads while covered publishes little or none of its content. Let part of the window show, for example with 'move-window' toward a screen edge the window in front does not reach, then snapshot again.",
+        })
+    })
 }
 
 /// Remembers the window a whole-window snapshot observed, and describes a
@@ -248,3 +271,7 @@ pub(crate) fn format_snapshot_fields(
 #[cfg(test)]
 #[path = "snapshot_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "snapshot_covered_tests.rs"]
+mod covered_tests;

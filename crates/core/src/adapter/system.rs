@@ -255,6 +255,14 @@ pub trait SystemOps: Send + Sync {
         Err(AdapterError::not_supported("focused_window"))
     }
 
+    /// Whether one window in front covers `window` completely. A web runtime
+    /// stops publishing a page whose window shows no pixel on screen, so the
+    /// caller is told to let part of the window show. `None` when the platform
+    /// cannot tell.
+    fn window_is_covered(&self, _window: &WindowInfo) -> Option<bool> {
+        None
+    }
+
     fn press_key_for_app(
         &self,
         _process: ProcessIdentity,

@@ -222,6 +222,14 @@ impl SystemOps for MacOSAdapter {
         )
     }
 
+    fn window_is_covered(&self, window: &WindowInfo) -> Option<bool> {
+        let number = window.id.strip_prefix("w-")?.parse().ok()?;
+        crate::system::window::cg_window_cover::covered_by_one_window(
+            number,
+            window.bounds.as_ref()?,
+        )
+    }
+
     fn press_key_for_app(
         &self,
         process: ProcessIdentity,

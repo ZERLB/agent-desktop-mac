@@ -49,6 +49,7 @@ pub(crate) enum WindowRecordScope<'a> {
     Pid(i32),
     Pids(&'a rustc_hash::FxHashSet<i32>),
     Window(i64),
+    Every,
 }
 
 impl WindowRecordScope<'_> {
@@ -57,6 +58,7 @@ impl WindowRecordScope<'_> {
             Self::Pid(expected) => pid == expected,
             Self::Pids(expected) => expected.contains(&pid),
             Self::Window(expected) => window_number == expected,
+            Self::Every => true,
         }
     }
 }

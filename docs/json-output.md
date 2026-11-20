@@ -213,6 +213,19 @@ On macOS a key posted to a process reaches its key window, so a `press` whose wi
 
 `cause` is `person_is_typing` when the application is frontmost and the person kept using the keyboard or a mouse button, `application_hidden`, `window_minimized`, `transient_window_holds_keyboard` when a dialog of the frontmost application holds the keyboard, `hand_over_not_observed` when the application did not move its key window, `window_has_no_number`, or `sibling_window_holds_keyboard` when the hand-over is unavailable or turned off with `AGENT_DESKTOP_KEY_HANDOFF=off`. Key-driven `scroll` reports the same causes under `kind: web_scroll_window_not_key`.
 
+## Window covered by another window
+
+A web runtime stops publishing the content of a page whose window shows no pixel on screen, so a browser or Electron window that sits completely behind another window reads as nearly empty, with no error. On macOS a `snapshot` of a window that one window in front covers completely adds:
+
+```json
+"window_covered": {
+  "covered": true,
+  "note": "Another window covers this window completely. A web page that loads while covered publishes little or none of its content. Let part of the window show, for example with 'move-window' toward a screen edge the window in front does not reach, then snapshot again."
+}
+```
+
+Several windows that cover it together are not detected. A native application keeps publishing its content while covered, so there the note needs no action.
+
 ## Screenshot of a window that is not on screen
 
 A window of a hidden application, a minimized window and a window on another desktop keep the last frame they drew. A `screenshot` of one succeeds and adds:
