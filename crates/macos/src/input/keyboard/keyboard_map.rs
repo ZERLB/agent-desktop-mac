@@ -118,7 +118,7 @@ fn layout_code(
             format!("No unmodified key types '{symbol}' in the active keyboard layout"),
         )
         .with_suggestion(
-            "This symbol needs a modifier or is missing in the active layout; nothing was sent",
+            "This symbol needs a modifier or is missing in the active layout; nothing was sent. For a shortcut, use an equivalent without the symbol (cmd+left instead of cmd+[ goes back in a browser) or click its menu item: 'snapshot --app <app> --surface menubar'",
         )),
         LayoutLookup::LayoutUnavailable => Err(AdapterError::new(
             ErrorCode::ActionFailed,
