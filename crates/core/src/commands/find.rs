@@ -54,7 +54,22 @@ pub fn execute(
     let query = locator_query_from_args(&args)?;
     query.validate_states().map_err(AppError::Adapter)?;
 
-    live::execute(&args, &query, adapter, context).map_err(name_the_traversal_remedy)
+    let window_surface = args.surface == crate::SnapshotSurface::Window && args.root.is_none();
+    let app = args.app.clone();
+    let requested = args.window_id.clone();
+    let mut args = args;
+    super::window_affinity::with_sticky_window(
+        context,
+        app.as_deref(),
+        requested.as_deref(),
+        window_surface,
+        |window_id| {
+            args.window_id = window_id.map(str::to_string);
+            live::execute(&args, &query, adapter, context)
+        },
+    )
+    .map(|(value, _)| value)
+    .map_err(name_the_traversal_remedy)
 }
 
 /// A traversal that ran out of budget on a large tree is not evidence the

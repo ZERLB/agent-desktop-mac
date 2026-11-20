@@ -9,11 +9,38 @@ use std::path::PathBuf;
 
 const PROCESS_STATE_PROBE_BUDGET: std::time::Duration = std::time::Duration::from_secs(1);
 
+#[derive(Clone)]
 pub struct ScreenshotArgs {
     pub app: Option<String>,
     pub window_id: Option<String>,
     pub screen: Option<usize>,
     pub output_path: Option<PathBuf>,
+}
+
+/// Captures with window affinity: a capture that names only an application
+/// shows the window the caller last snapshotted for it, while that window exists.
+pub fn execute_with_context(
+    args: ScreenshotArgs,
+    adapter: &dyn PlatformAdapter,
+    context: &crate::context::CommandContext,
+) -> Result<Value, AppError> {
+    if args.screen.is_some() {
+        return execute(args, adapter);
+    }
+    let app = args.app.clone();
+    let requested = args.window_id.clone();
+    super::window_affinity::with_sticky_window(
+        context,
+        app.as_deref(),
+        requested.as_deref(),
+        true,
+        |window_id| {
+            let mut attempt = args.clone();
+            attempt.window_id = window_id.map(str::to_string);
+            execute(attempt, adapter)
+        },
+    )
+    .map(|(value, _)| value)
 }
 
 pub fn execute(args: ScreenshotArgs, adapter: &dyn PlatformAdapter) -> Result<Value, AppError> {

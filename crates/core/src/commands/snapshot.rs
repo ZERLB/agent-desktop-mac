@@ -1,7 +1,7 @@
 use crate::{
     AppError,
     adapter::{PlatformAdapter, SnapshotSurface},
-    commands::{wait_selector, wait_selector::WaitSelectorInput},
+    commands::{wait_selector, wait_selector::WaitSelectorInput, window_affinity},
     context::CommandContext,
     refs::validate_ref_id,
     snapshot,
@@ -98,13 +98,23 @@ pub fn execute(
         )?);
     }
 
+    let window_surface = args.surface == SnapshotSurface::Window;
     if let Some(wait) = context.wait_selector() {
+        let sticky = window_affinity::sticky_target(
+            context,
+            args.app.as_deref(),
+            args.window_id.as_deref(),
+            window_surface,
+        );
         return wait_selector::execute(
             WaitSelectorInput {
                 query_raw: wait.query_raw.clone(),
                 gone: wait.gone,
                 app: args.app.clone(),
-                window_id: args.window_id.clone(),
+                window_id: args
+                    .window_id
+                    .clone()
+                    .or(sticky.map(|affinity| affinity.window_id)),
                 opts,
                 timeout_ms: wait.timeout_ms,
             },
@@ -113,24 +123,54 @@ pub fn execute(
         );
     }
 
-    let result = snapshot::run_with_context(
-        adapter,
-        &opts,
-        &snapshot::SnapshotTarget {
-            app_name: args.app.as_deref(),
-            window_id: args.window_id.as_deref(),
-        },
+    let (result, kept) = window_affinity::with_sticky_window(
         context,
-        args.timeout_ms
-            .unwrap_or(snapshot::DEFAULT_SNAPSHOT_TIMEOUT_MS),
+        args.app.as_deref(),
+        args.window_id.as_deref(),
+        window_surface,
+        |window_id| {
+            snapshot::run_with_context(
+                adapter,
+                &opts,
+                &snapshot::SnapshotTarget {
+                    app_name: args.app.as_deref(),
+                    window_id,
+                },
+                context,
+                args.timeout_ms
+                    .unwrap_or(snapshot::DEFAULT_SNAPSHOT_TIMEOUT_MS),
+            )
+        },
     )?;
+    let affinity_note = remember_window(&result, &args, kept.as_ref(), context);
 
     let diff = compare_with_baseline(&result, &opts, args.diff_from.as_deref(), context)?;
     let mut body = format_result(result)?;
     if let Some(diff) = diff {
         body["diff"] = diff;
     }
+    if let Some(note) = affinity_note {
+        body["window_affinity"] = note;
+    }
     Ok(body)
+}
+
+/// Remembers the window a whole-window snapshot observed, and describes a
+/// remembered window that was kept over the application's focused one.
+fn remember_window(
+    result: &snapshot::SnapshotResult,
+    args: &SnapshotArgs,
+    kept: Option<&window_affinity::Affinity>,
+    context: &CommandContext,
+) -> Option<Value> {
+    let crate::SnapshotOwner::Window(window) = &result.owner else {
+        return None;
+    };
+    if args.surface != SnapshotSurface::Window {
+        return None;
+    }
+    window_affinity::remember(context, args.app.as_deref(), window);
+    kept.and_then(|affinity| window_affinity::kept_note(affinity, window.state.is_focused))
 }
 
 /// Keeps the fingerprints of this snapshot for a later `--diff`, and compares it with

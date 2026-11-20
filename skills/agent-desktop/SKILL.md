@@ -58,6 +58,10 @@ agent-desktop snapshot --root @s8f3k2p9:e3 -i --compact        # verify: re-read
 - `TIMEOUT` with `details.kind: resolution_identity_unknown`: a live read did not answer, so identity is unproven. Nothing was sent; retry.
 - `SNAPSHOT_NOT_FOUND`: the snapshot id expired. Snapshot again.
 
+## Windows
+
+`--app` without `--window-id` targets the app's focused window; with several windows and none focused it returns `AMBIGUOUS_TARGET`. Once you snapshot a window, `snapshot`, `find` and `screenshot` that name only `--app` keep using that window, per `--session` and `--agent-id`, while it exists, even when the user brings another window of the same app to the front. A snapshot says so in `data.window_affinity` when the kept window is not the focused one. Pass `--window-id` to switch, for example to a window your own action opened.
+
 ## Delivery and retry
 
 Action results carry `data.disposition` and errors carry `error.disposition`, each with `delivery` and `retry`. Observation commands such as `snapshot` have none on success; their errors, and every `INVALID_ARGS` refusal, carry `not_delivered` and `retry: safe`.

@@ -187,6 +187,18 @@ When a ref action returns `delivery_uncertain` with a post-action wait selector,
 
 `added` holds at most 60 entries, each with `role` and, when present, `name`, `value`, `states` and `ref_id`; `added_truncated` is true when more appeared. Removed nodes are only counted by role, because a snapshot keeps a fingerprint of each node and not its text.
 
+## Window affinity
+
+A `snapshot`, `find` or `screenshot` that names `--app` without `--window-id` on the window surface uses the window of the caller's last whole-window snapshot of that app, while that window exists, instead of the app's focused window. The window is remembered per session and agent for 12 hours in `window_affinity.json` under the state root, or under the session folder, and forgotten when it no longer resolves. A snapshot that kept a window which is not the focused one carries:
+
+```json
+"window_affinity": {
+  "window_id": "w-6758",
+  "kept": true,
+  "note": "Kept the window this caller last snapshotted for this app, not the app's focused window; pass --window-id to target another window."
+}
+```
+
 ## Find result shape
 
 `find` match objects report the element's actual accessibility `name`. Elements

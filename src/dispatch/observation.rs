@@ -79,8 +79,9 @@ pub(super) fn find(
 pub(super) fn screenshot(
     args: ScreenshotArgs,
     adapter: &dyn PlatformAdapter,
+    context: &CommandContext,
 ) -> Result<Value, AppError> {
-    screenshot_command::execute(
+    screenshot_command::execute_with_context(
         screenshot_command::ScreenshotArgs {
             app: args.scope.app,
             window_id: args.scope.window_id,
@@ -88,6 +89,7 @@ pub(super) fn screenshot(
             output_path: args.output_path,
         },
         adapter,
+        context,
     )
 }
 
