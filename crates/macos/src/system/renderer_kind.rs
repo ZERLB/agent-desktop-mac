@@ -42,6 +42,48 @@ pub(crate) fn detect_chromium(_pid: i32) -> Option<RendererKind> {
     None
 }
 
+/// Whether the application behind `pid` ships a renderer helper, which is how
+/// every Chromium-based application, browsers included, hosts web content.
+/// Read from the bundle, so it holds while the application publishes no web
+/// content at all. Any failure reports "no".
+#[cfg(target_os = "macos")]
+pub(crate) fn ships_renderer_helper(pid: i32) -> bool {
+    executable_path(pid)
+        .and_then(|executable| bundle_root_from_executable(&executable))
+        .is_some_and(|bundle_root| renderer_helper_in_bundle(&bundle_root))
+}
+
+/// A renderer helper sits either beside the frameworks or in the `Helpers`
+/// folder of one of them. Costs one `readdir` plus one per framework.
+fn renderer_helper_in_bundle(bundle_root: &Path) -> bool {
+    let frameworks = bundle_root.join("Contents/Frameworks");
+    let names = entry_names(&frameworks);
+    names.iter().any(|name| is_renderer_helper(name))
+        || names
+            .iter()
+            .filter(|name| name.ends_with(".framework"))
+            .any(|framework| {
+                entry_names(&frameworks.join(framework).join("Helpers"))
+                    .iter()
+                    .any(|name| is_renderer_helper(name))
+            })
+}
+
+fn is_renderer_helper(entry_name: &str) -> bool {
+    entry_name.ends_with("Helper (Renderer).app")
+}
+
+fn entry_names(directory: &Path) -> Vec<String> {
+    std::fs::read_dir(directory)
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 #[cfg(target_os = "macos")]
 pub(crate) fn executable_path(pid: i32) -> Option<PathBuf> {
     let mut buffer = [0_u8; libc::PROC_PIDPATHINFO_MAXSIZE as usize];

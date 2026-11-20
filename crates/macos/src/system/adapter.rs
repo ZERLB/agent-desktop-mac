@@ -230,6 +230,10 @@ impl SystemOps for MacOSAdapter {
         )
     }
 
+    fn peek_position(&self, window: &WindowInfo) -> Option<agent_desktop_core::Point> {
+        crate::system::window::window_peek::peek_position(window)
+    }
+
     fn press_key_for_app(
         &self,
         process: ProcessIdentity,

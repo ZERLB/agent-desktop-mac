@@ -111,3 +111,32 @@ fn unrelated_or_partial_framework_names_are_not_recognized() {
         "electron framework.framework"
     ));
 }
+
+#[test]
+fn a_renderer_helper_beside_the_frameworks_marks_a_web_runtime() {
+    let bundle = FixtureBundle::new();
+    bundle.add_framework("Some Browser Framework.framework");
+    bundle.add_framework("Some Browser Helper (Renderer).app");
+
+    assert!(renderer_helper_in_bundle(&bundle.root));
+}
+
+#[test]
+fn a_renderer_helper_inside_a_framework_marks_a_web_runtime() {
+    let bundle = FixtureBundle::new();
+    bundle.add_framework(
+        "Some Browser Framework.framework/Helpers/Some Browser Helper (Renderer).app",
+    );
+
+    assert!(renderer_helper_in_bundle(&bundle.root));
+}
+
+#[test]
+fn a_bundle_without_a_renderer_helper_is_not_a_web_runtime() {
+    let bundle = FixtureBundle::new();
+    bundle.add_framework("Sparkle.framework");
+    bundle.add_framework("Some App Helper (GPU).app");
+
+    assert!(!renderer_helper_in_bundle(&bundle.root));
+    assert!(!renderer_helper_in_bundle(&FixtureBundle::new().root));
+}

@@ -39,6 +39,7 @@ const NON_COMMAND_MODULES: &[&str] = &[
     "wait_text_match",
     "wait_timeout",
     "window_affinity",
+    "window_reveal",
     "wait_event",
     "wait_event_filter",
     "wait_event_input",

@@ -12,6 +12,13 @@ use super::cg_window::{WindowRecordScope, records_from_dictionaries};
 /// Whether an on-screen window in front of window `number` contains all of
 /// `bounds`. `None` when the window server gives no usable list.
 pub(crate) fn covered_by_one_window(number: i64, bounds: &Rect) -> Option<bool> {
+    covering_window(number, bounds).map(|front| front.is_some())
+}
+
+/// The frame of the first on-screen window in front of window `number` that
+/// contains all of `bounds`. The outer `None` means the window server gave no
+/// usable list.
+pub(crate) fn covering_window(number: i64, bounds: &Rect) -> Option<Option<Rect>> {
     use crate::tree::properties::cf_type::borrowed_cf_dictionary;
     use core_graphics::display::CGDisplay;
     use core_graphics::window::{
@@ -29,8 +36,9 @@ pub(crate) fn covered_by_one_window(number: i64, bounds: &Rect) -> Option<bool> 
     let above = records_from_dictionaries(dictionaries, WindowRecordScope::Every).ok()?;
     Some(
         above
-            .iter()
-            .any(|window| window.visible && covers(&window.bounds, bounds)),
+            .into_iter()
+            .find(|window| window.visible && covers(&window.bounds, bounds))
+            .map(|window| window.bounds),
     )
 }
 

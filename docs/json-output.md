@@ -215,16 +215,19 @@ On macOS a key posted to a process reaches its key window, so a `press` whose wi
 
 ## Window covered by another window
 
-A web runtime stops publishing the content of a page whose window shows no pixel on screen, so a browser or Electron window that sits completely behind another window reads as nearly empty, with no error. On macOS a `snapshot` of a window that one window in front covers completely adds:
+A web runtime stops publishing the content of a page whose window shows no pixel on screen, so a browser or Electron window that sits completely behind another window reads as nearly empty, with no error. On macOS a headless `snapshot` of such a window slides it to a screen edge that the window in front leaves free, usually down to the band beside the Dock, waits half a second and reads it again. The window stays behind and takes no focus; only a strip of it shows. The snapshot then carries:
 
 ```json
 "window_covered": {
   "covered": true,
-  "note": "Another window covers this window completely. A web page that loads while covered publishes little or none of its content. Let part of the window show, for example with 'move-window' toward a screen edge the window in front does not reach, then snapshot again."
+  "moved": true,
+  "from": { "x": 59.0, "y": 77.0 },
+  "to": { "x": 59.0, "y": 268.0 },
+  "note": "Another window covered this window completely, and a web page publishes little or none of its content while covered. The window was moved so a strip of it shows beside the window in front, and read again. It stayed behind and took no focus. Set AGENT_DESKTOP_UNCOVER=off to leave windows where they are."
 }
 ```
 
-Several windows that cover it together are not detected. A native application keeps publishing its content while covered, so there the note needs no action.
+Only a window of a Chromium-based application, or one that publishes a web area, is moved: a native application keeps publishing its content while covered. When the window in front leaves no free edge, when the window does not fit, with `--headed`, or with `AGENT_DESKTOP_UNCOVER=off`, nothing moves and the snapshot carries only `"covered": true` and a note that says to let part of the window show with `move-window`. One window in front is what counts: several windows that cover it together are not detected, and a translucent window in front counts as covering although the page behind it stays published.
 
 ## Screenshot of a window that is not on screen
 

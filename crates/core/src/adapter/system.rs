@@ -255,11 +255,14 @@ pub trait SystemOps: Send + Sync {
         Err(AdapterError::not_supported("focused_window"))
     }
 
-    /// Whether one window in front covers `window` completely. A web runtime
-    /// stops publishing a page whose window shows no pixel on screen, so the
-    /// caller is told to let part of the window show. `None` when the platform
-    /// cannot tell.
+    /// Whether one window in front covers `window` completely, which makes a
+    /// web runtime stop publishing its page. `None` when unknown.
     fn window_is_covered(&self, _window: &WindowInfo) -> Option<bool> {
+        None
+    }
+
+    /// Where a completely covered web window can show a strip of itself.
+    fn peek_position(&self, _window: &WindowInfo) -> Option<crate::Point> {
         None
     }
 

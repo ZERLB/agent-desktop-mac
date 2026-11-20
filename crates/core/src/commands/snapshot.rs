@@ -123,27 +123,34 @@ pub fn execute(
         );
     }
 
-    let (result, kept) = window_affinity::with_sticky_window(
+    let take = |window_id: Option<&str>| {
+        snapshot::run_with_context(
+            adapter,
+            &opts,
+            &snapshot::SnapshotTarget {
+                app_name: args.app.as_deref(),
+                window_id,
+            },
+            context,
+            args.timeout_ms
+                .unwrap_or(snapshot::DEFAULT_SNAPSHOT_TIMEOUT_MS),
+        )
+    };
+    let (mut result, kept) = window_affinity::with_sticky_window(
         context,
         args.app.as_deref(),
         args.window_id.as_deref(),
         window_surface,
-        |window_id| {
-            snapshot::run_with_context(
-                adapter,
-                &opts,
-                &snapshot::SnapshotTarget {
-                    app_name: args.app.as_deref(),
-                    window_id,
-                },
-                context,
-                args.timeout_ms
-                    .unwrap_or(snapshot::DEFAULT_SNAPSHOT_TIMEOUT_MS),
-            )
-        },
+        take,
     )?;
+    let covered_note = match super::window_reveal::reveal(&result, adapter, context) {
+        Some((window_id, note)) => {
+            result = take(Some(&window_id))?;
+            Some(note)
+        }
+        None => covered_note(&result, adapter),
+    };
     let affinity_note = remember_window(&result, &args, kept.as_ref(), context);
-    let covered_note = covered_note(&result, adapter);
 
     let diff = compare_with_baseline(&result, &opts, args.diff_from.as_deref(), context)?;
     let mut body = format_result(result)?;
