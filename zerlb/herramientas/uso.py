@@ -97,13 +97,14 @@ def resumir(filas, dias, md):
         for (cmd, app), cuenta in sorted(vias.items(), key=lambda par: -sum(par[1].values()))[:10]:
             fuera.append(f"- {cmd} en {app}: " + ", ".join(f"{m} · {e} ×{n}" for (m, e), n in cuenta.most_common(3)))
     argumentos = collections.Counter(
-        (f.get("cmd") or "?", f.get("detalle") or "?", f.get("opciones") or "sin opciones")
+        (f.get("cmd") or "?", f.get("detalle") or "?", f.get("opciones") or "sin opciones",
+         f.get("forma") or "sin dato")
         for f in malas if f.get("codigo") == "INVALID_ARGS" and "detalle" in f)
     if argumentos:
         fuera.append("")
-        fuera.append("Argumentos rechazados (comando · mensaje · opciones usadas):")
-        for (cmd, detalle, opciones), n in argumentos.most_common(8):
-            fuera.append(f"- {cmd} · {detalle} · {opciones} ×{n}")
+        fuera.append("Argumentos rechazados (comando · mensaje · opciones usadas · forma del primer argumento):")
+        for (cmd, detalle, opciones, forma), n in argumentos.most_common(8):
+            fuera.append(f"- {cmd} · {detalle} · {opciones} · {forma} ×{n}")
     return "\n".join(fuera)
 
 

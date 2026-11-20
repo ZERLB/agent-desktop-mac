@@ -11,7 +11,9 @@
 # con que se entregó la acción (el nombre del primer paso, como AXPress o
 # PIDTargetedUnicodeText) y cómo quedó la entrega (delivered_verified, not_delivered…).
 # En los errores INVALID_ARGS guarda además el mensaje sin lo que iba entre comillas
-# ni números, para saber qué se escribió mal. Nunca guarda textos, referencias,
+# ni números, y la forma del primer argumento después del comando (vacía, texto,
+# completa, corta, con mayúsculas, con cola…), para saber qué se escribió mal.
+# Nunca guarda textos, referencias,
 # valores, capturas ni la salida del comando. Si el registro falla, la llamada no.
 
 REAL="${AGENT_DESKTOP_REAL:?Define AGENT_DESKTOP_REAL con la ruta del binario real de agent-desktop}"
@@ -32,6 +34,20 @@ for arg in "$@"; do
     previo="$arg"
 done
 
+forma_ref() {
+    local a="$1"
+    if [ -z "$a" ]; then print vacia
+    elif [[ "$a" =~ '^@[a-z0-9]+:e[0-9]+$' ]]; then print completa
+    elif [[ "$a" =~ '^@?e[0-9]+$' ]]; then print corta
+    elif [[ "$a" =~ '^@[0-9]+$' ]]; then print vaciada-por-zsh
+    elif [[ "$a" =~ '^@[A-Za-z0-9]+:e[0-9]+$' ]]; then print mayusculas
+    elif [[ "$a" =~ '^@[a-z0-9]+:e[0-9]+.' ]]; then print con-cola
+    elif [[ "$a" =~ '^@' ]]; then print arroba-otra
+    elif [[ "$a" =~ ' ' ]]; then print texto-con-espacios
+    else print texto
+    fi
+}
+
 zmodload zsh/datetime
 inicio=$EPOCHREALTIME
 salida=$("$REAL" "$@")
@@ -47,6 +63,8 @@ printf '%s\n' "$salida"
     previo=""
     opciones=""
     ref=""
+    primero=""
+    hay_primero=false
     lectura=""
     for arg in "$@"; do
         case "$arg" in
@@ -59,11 +77,23 @@ printf '%s\n' "$salida"
         if [[ "$nombre" =~ '^--?[A-Za-z][A-Za-z0-9-]*$' && ",$opciones," != *",$nombre,"* ]]; then
             opciones="${opciones:+$opciones,}$nombre"
         fi
+        recien=false
         if [ -z "$cmd" ]; then
             case "$previo" in
                 --session | --agent-id | --trace | --screenshot | --app | --window-id) ;;
-                *) case "$arg" in -*) ;; *) cmd="$arg" ;; esac ;;
+                *) case "$arg" in -*) ;; *) cmd="$arg"; recien=true ;; esac ;;
             esac
+        fi
+        if [ -n "$cmd" ] && ! $recien && ! $hay_primero; then
+            case "$previo" in
+                --direction | --amount | --timeout-ms | --session | --agent-id | --trace | --screenshot | \
+                --app | --window-id | --wait-for | --wait-for-gone | --wait-timeout | --max-depth | \
+                --surface | --root | --diff | --text | --role | --name | --screen | --output) ;;
+                *) case "$arg" in -?*) ;; *) primero="$arg"; hay_primero=true ;; esac ;;
+            esac
+        fi
+        if $recien; then
+            :
         elif [[ "$arg" =~ '^@[a-z0-9]+:e[0-9]+$' ]]; then
             ref="${ref:-completa}"
             lectura="${lectura:-${${arg#@}%%:*}}"
@@ -93,20 +123,22 @@ printf '%s\n' "$salida"
         | grep -o '"label":"[A-Za-z_ ]\{1,40\}"' | head -1 | cut -d'"' -f4)
     entrega=$(printf '%s' "$salida" | grep -o '"delivery":"[a-z_]*"' | head -1 | cut -d'"' -f4)
     codigo=""
+    forma=""
     detalle=""
     if [ "$ok" = "false" ]; then
         codigo=$(printf '%s' "$salida" | grep -o '"code":"[A-Z_]*"' | head -1 | cut -d'"' -f4)
         if [ "$codigo" = "INVALID_ARGS" ]; then
+            $hay_primero && forma=$(forma_ref "$primero")
             detalle=$(printf '%s' "$salida" | grep -o '"message":"[^"]*"' | head -1 | cut -d'"' -f4 \
                 | sed -E "s/'[^']*'/'_'/g" | tr -cd "A-Za-z_<>:@' .,()-" | cut -c1-100)
         fi
     fi
     limpiar() { printf '%s' "$1" | tr -d '"\\\n\r' | cut -c1-80; }
     mkdir -p "$DIR"
-    printf '{"t":"%s","cmd":"%s","fisico":%s,"ok":%s,"codigo":"%s","ms":%s,"rc":%s,"app":"%s","opciones":"%s","ref":"%s","ayuda":%s,"detalle":"%s","metodo":"%s","entrega":"%s"}\n' \
+    printf '{"t":"%s","cmd":"%s","fisico":%s,"ok":%s,"codigo":"%s","ms":%s,"rc":%s,"app":"%s","opciones":"%s","ref":"%s","ayuda":%s,"detalle":"%s","metodo":"%s","entrega":"%s","forma":"%s"}\n' \
         "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(limpiar "$cmd")" "$fisico" "$ok" "$codigo" \
         "$ms" "$rc" "$(limpiar "$app")" "$(limpiar "$opciones")" "$ref" "$ayuda" \
-        "$(limpiar "$detalle")" "$(limpiar "$metodo")" "$entrega" >> "$DIR/registro.jsonl"
+        "$(limpiar "$detalle")" "$(limpiar "$metodo")" "$entrega" "$forma" >> "$DIR/registro.jsonl"
 } 2>/dev/null
 
 exit "$rc"
