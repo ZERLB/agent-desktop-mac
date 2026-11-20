@@ -46,28 +46,46 @@ pub fn execute_with_context(
 pub fn execute(args: ScreenshotArgs, adapter: &dyn PlatformAdapter) -> Result<Value, AppError> {
     let deadline = crate::Deadline::standard()?;
     let target = resolve_target(&args, adapter, deadline)?;
+    let stale_frame = stale_frame_note(&target);
     let buf = adapter.screenshot(target, deadline)?;
 
+    let mut response = json!({
+        "format": buf.format.as_str(),
+        "width": buf.width,
+        "height": buf.height,
+        "scale_factor": buf.scale_factor
+    });
     if let Some(path) = args.output_path {
         crate::refs::write_user_file(&path, &buf.data)
             .map_err(|error| crate::refs::unwritable_output("the screenshot", &path, error))?;
-        Ok(json!({
-            "path": path.to_string_lossy(),
-            "format": buf.format.as_str(),
-            "width": buf.width,
-            "height": buf.height,
-            "scale_factor": buf.scale_factor
-        }))
+        response["path"] = json!(path.to_string_lossy());
     } else {
-        let encoded = base64::engine::general_purpose::STANDARD.encode(&buf.data);
-        Ok(json!({
-            "data": encoded,
-            "format": buf.format.as_str(),
-            "width": buf.width,
-            "height": buf.height,
-            "scale_factor": buf.scale_factor
-        }))
+        response["data"] = json!(base64::engine::general_purpose::STANDARD.encode(&buf.data));
     }
+    if let Some(note) = stale_frame {
+        response["stale_frame"] = note;
+    }
+    Ok(response)
+}
+
+/// A window that is not on screen keeps the last frame it drew, so a capture
+/// of it can show content the application has changed since.
+fn stale_frame_note(target: &ScreenshotTarget) -> Option<Value> {
+    let ScreenshotTarget::ExactWindow(window) = target else {
+        return None;
+    };
+    let reason = if window.state.minimized == Some(true) {
+        "window_minimized"
+    } else if window.state.visible == Some(false) {
+        "window_not_on_screen"
+    } else {
+        return None;
+    };
+    Some(json!({
+        "possible": true,
+        "reason": reason,
+        "note": "This window is not on screen (hidden application, minimized window or another desktop), so the image can be the last frame it drew instead of its current content. Read the current state with 'snapshot' or 'get'.",
+    }))
 }
 
 fn resolve_target(
@@ -217,3 +235,7 @@ fn select_unique_window(
 #[cfg(test)]
 #[path = "screenshot_deadline_tests.rs"]
 mod deadline_tests;
+
+#[cfg(test)]
+#[path = "screenshot_stale_frame_tests.rs"]
+mod stale_frame_tests;

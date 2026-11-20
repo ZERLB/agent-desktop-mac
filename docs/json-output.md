@@ -213,6 +213,20 @@ On macOS a key posted to a process reaches its key window. A `press` whose windo
 
 `cause` is `sibling_window_holds_keyboard` when the application is frontmost with another window active, `application_hidden`, `window_minimized`, or `main_window_write_refused` and `main_window_not_observed` when the application did not accept the change.
 
+## Screenshot of a window that is not on screen
+
+A window of a hidden application, a minimized window and a window on another desktop keep the last frame they drew. A `screenshot` of one succeeds and adds:
+
+```json
+"stale_frame": {
+  "possible": true,
+  "reason": "window_not_on_screen",
+  "note": "This window is not on screen (hidden application, minimized window or another desktop), so the image can be the last frame it drew instead of its current content. Read the current state with 'snapshot' or 'get'."
+}
+```
+
+`reason` is `window_minimized` for a minimized window and `window_not_on_screen` otherwise. A window that is on screen behind other windows draws normally and carries no `stale_frame`.
+
 ## Find result shape
 
 `find` match objects report the element's actual accessibility `name`. Elements
