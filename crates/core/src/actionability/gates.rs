@@ -213,6 +213,20 @@ fn scrolls_through_container(evidence: &ActionabilityEvidence, request: &ActionR
         && capability::contains_any(&evidence.available_actions, &[capability::SCROLL_TO])
 }
 
+/// An element that only stands for its scroll container need not be on screen
+/// for that container to scroll, and bringing it into view first would move
+/// the container further than the caller asked.
+pub(super) fn scrolls_container_on_its_behalf(
+    evidence: &ActionabilityEvidence,
+    request: &ActionRequest,
+) -> bool {
+    scrolls_through_container(evidence, request)
+        && !capability::contains_any(
+            &evidence.available_actions,
+            capability::for_action(&request.action),
+        )
+}
+
 pub(super) fn policy(request: &ActionRequest) -> ActionabilityCheck {
     if request.action.requires_cursor_policy() && !request.policy.allow_cursor_move {
         return fail_terminal(

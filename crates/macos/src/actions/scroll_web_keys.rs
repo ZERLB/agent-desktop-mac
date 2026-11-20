@@ -9,6 +9,7 @@ const MAX_WEB_AREA_DEPTH: usize = 64;
 const SETTLE_STEP: Duration = Duration::from_millis(40);
 const SETTLE_ATTEMPTS: u32 = 10;
 const MOVE_EPSILON: f64 = 0.5;
+const MIN_SHOWN_EDGE: f64 = 2.0;
 
 /// Roles whose web controls consume arrow keys to change their own value or
 /// selection, so the keys must go to the document instead of to them.
@@ -35,9 +36,9 @@ const ARROW_CONSUMING_ROLES: &[&str] = &[
 /// arrow keys to the owning process, one key per requested unit.
 ///
 /// Process-targeted keys reach the application's key window even while the
-/// application is in the background, so keys are sent only when the target
-/// belongs to that window. A window behind a sibling window of the same
-/// application gets no key, because the keys would land in the sibling.
+/// application is in the background, so the target's window takes the
+/// keyboard first. In the frontmost application a window behind a sibling
+/// gets no key, because the keys would land in the window the person is in.
 /// Returns whether the target was seen to move.
 pub(crate) fn scroll_with_keys(
     element: &AXElement,
@@ -93,28 +94,17 @@ fn ensure_key_window(
     pid: i32,
     deadline: Deadline,
 ) -> Result<(), AdapterError> {
-    let window = crate::actions::scroll_read::element(element, "AXWindow", deadline)?;
-    let app = crate::tree::element_for_pid(pid);
-    let key_window = match crate::actions::scroll_read::element(&app, "AXFocusedWindow", deadline)?
-    {
-        Some(window) => Some(window),
-        None => crate::actions::scroll_read::element(&app, "AXMainWindow", deadline)?,
-    };
-    let same = window
-        .as_ref()
-        .zip(key_window.as_ref())
-        .is_some_and(|(window, key_window)| {
-            crate::tree::properties::capabilities::same_element(window, key_window)
-        });
-    if same {
+    let claim = crate::system::window::window_key::claim_for_element(element, pid, deadline)?;
+    let crate::system::window::window_key::KeyClaim::Refused(cause) = claim else {
         return Ok(());
-    }
+    };
     Err(AdapterError::new(
         ErrorCode::ActionNotSupported,
         "This web content scrolls only by keys, and keys would reach another window of the same application",
     )
     .with_details(serde_json::json!({
         "kind": "web_scroll_window_not_key",
+        "cause": cause,
         "physical_delivery_started": false,
     }))
     .with_disposition(DeliverySemantics::not_delivered())
@@ -133,7 +123,7 @@ fn focus_scroll_context(
     let on_screen = bounds(element, deadline)
         .ok()
         .flatten()
-        .zip(bounds(web_area, deadline).ok().flatten())
+        .zip(visible_document(web_area, deadline))
         .is_some_and(|(element, viewport)| overlaps(&element, &viewport));
     let target = if on_screen && !role.as_deref().is_some_and(consumes_arrow_keys) {
         element
@@ -186,13 +176,43 @@ fn settled_move(
     false
 }
 
+/// The part of a web document that is on screen. A web area can report the
+/// frame of its whole document, so it is clipped to the container that shows
+/// it and to its window.
+fn visible_document(web_area: &AXElement, deadline: Deadline) -> Option<Rect> {
+    let mut visible = bounds(web_area, deadline).ok().flatten()?;
+    for attribute in ["AXParent", "AXWindow"] {
+        let clip = crate::actions::scroll_read::element(web_area, attribute, deadline)
+            .ok()
+            .flatten()
+            .and_then(|container| bounds(&container, deadline).ok().flatten());
+        if let Some(clip) = clip {
+            visible = intersection(&visible, &clip)?;
+        }
+    }
+    Some(visible)
+}
+
+fn intersection(first: &Rect, second: &Rect) -> Option<Rect> {
+    let x = first.x.max(second.x);
+    let y = first.y.max(second.y);
+    let right = (first.x + first.width).min(second.x + second.width);
+    let bottom = (first.y + first.height).min(second.y + second.height);
+    (right > x && bottom > y).then_some(Rect {
+        x,
+        y,
+        width: right - x,
+        height: bottom - y,
+    })
+}
+
 /// Focusing an element outside the visible document scrolls the document to
-/// it first, so only an element that overlaps the viewport takes the focus.
+/// it first, so only an element that shows inside the viewport takes the
+/// focus. A web runtime can clamp an off-screen element to a sliver on the
+/// viewport edge, which does not count as showing.
 fn overlaps(element: &Rect, viewport: &Rect) -> bool {
-    element.x < viewport.x + viewport.width
-        && element.x + element.width > viewport.x
-        && element.y < viewport.y + viewport.height
-        && element.y + element.height > viewport.y
+    intersection(element, viewport)
+        .is_some_and(|part| part.width > MIN_SHOWN_EDGE && part.height > MIN_SHOWN_EDGE)
 }
 
 fn moved_toward(before: &Rect, after: &Rect, direction: &Direction) -> bool {

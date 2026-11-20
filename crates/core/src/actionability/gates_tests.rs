@@ -205,3 +205,23 @@ fn scroll_delegates_to_the_container_of_an_element_that_scrolls_into_view() {
         "an element with neither scroll capability is still refused"
     );
 }
+
+#[test]
+fn an_element_that_stands_for_its_container_need_not_be_on_screen() {
+    let scroll = ActionRequest::headless(Action::Scroll(crate::Direction::Down, 1));
+    let mut target = evidence(Some(true), None);
+    target.available_actions = vec![crate::actions::capability::SCROLL_TO.into()];
+    assert!(super::scrolls_container_on_its_behalf(&target, &scroll));
+    assert!(
+        !super::scrolls_container_on_its_behalf(&target, &ActionRequest::headless(Action::Click)),
+        "every other action still needs the element on screen"
+    );
+
+    target
+        .available_actions
+        .push(crate::actions::capability::SCROLL.into());
+    assert!(
+        !super::scrolls_container_on_its_behalf(&target, &scroll),
+        "an element that scrolls itself keeps the visibility check"
+    );
+}

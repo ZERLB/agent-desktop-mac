@@ -65,8 +65,22 @@ pub(crate) fn focus_web_text_control_for_typing(
         super::copy_bool_attr(element, "AXFocused", deadline) == Some(true),
         super::properties::attributes::selected_text_range(element, deadline),
     );
+    claim_keyboard(element, deadline);
     let _ = crate::actions::ax_helpers::set_ax_bool_or_err(element, "AXFocused", true, deadline);
     Some(placed_caret)
+}
+
+/// Typed web text arrives as keys posted to the process, which reach its key
+/// window, so the control's window takes the keyboard before the control is
+/// focused. Best effort: after a refused claim the control does not take the
+/// application's focus and the caller writes the text semantically instead.
+#[cfg(target_os = "macos")]
+fn claim_keyboard(element: &AXElement, deadline: Deadline) {
+    if let Some(pid) =
+        crate::system::app::app_ops::pid_from_element(element, deadline).filter(|pid| *pid > 0)
+    {
+        let _ = crate::system::window::window_key::claim_for_element(element, pid, deadline);
+    }
 }
 
 /// True when a web text control is being edited: it holds focus and its caret was moved

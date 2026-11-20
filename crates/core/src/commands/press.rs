@@ -25,7 +25,9 @@ pub fn execute(
     let deadline = crate::Deadline::standard()?;
 
     let mut pressed_process = None;
-    let result = if let Some((expected, window)) = target_app(&args, adapter, deadline)? {
+    let mut kept_window = None;
+    let target = target_app(&args, adapter, context, deadline)?;
+    let result = if let Some((expected, window, kept)) = target {
         let lease = adapter.acquire_interaction_lease(deadline)?;
         let live = crate::commands::helpers::revalidate_app_for_mutation(
             adapter,
@@ -34,6 +36,10 @@ pub fn execute(
         )?;
         let process = crate::commands::helpers::process_identity(&live)?;
         pressed_process = Some(process.pid);
+        kept_window = window
+            .as_ref()
+            .zip(kept)
+            .and_then(|(window, kept)| kept_note(&kept, window));
         if context.physical_input_policy().is_headed() {
             match &window {
                 Some(window) => crate::actions::headed_focus::focus_exact_window(
@@ -64,35 +70,71 @@ pub fn execute(
         )?
     };
     crate::cursor_overlay::follow_caret_after_key(adapter, context, pressed_process);
+    let mut response = serde_json::to_value(result)?;
+    let waited_window = match (&kept_window, &mut response) {
+        (Some(note), Value::Object(fields)) => {
+            fields.insert("window_affinity".into(), note.clone());
+            note["window_id"].as_str().map(str::to_owned)
+        }
+        _ => None,
+    };
     super::helpers::apply_scoped_post_action_wait(
-        serde_json::to_value(result)?,
+        response,
         args.app,
-        args.window_id,
+        args.window_id.or(waited_window),
         adapter,
         context,
     )
 }
 
+type PressTarget = (
+    crate::AppInfo,
+    Option<crate::WindowInfo>,
+    Option<super::window_affinity::Affinity>,
+);
+
+/// The application and window a key goes to. A caller that names only an
+/// application keeps the window it last snapshotted there, so its keys do not
+/// follow the person into another window of the same application.
 fn target_app(
     args: &PressArgs,
     adapter: &dyn PlatformAdapter,
+    context: &CommandContext,
     deadline: crate::Deadline,
-) -> Result<Option<(crate::AppInfo, Option<crate::WindowInfo>)>, AppError> {
-    if let Some(window_id) = &args.window_id {
-        let window = crate::snapshot::resolve_window(
-            adapter,
-            args.app.as_deref(),
-            Some(window_id),
-            deadline,
-        )?;
-        let app = crate::system::app_lookup::resolve_app_owning(&window, adapter, deadline)?;
-        return Ok(Some((app, Some(window))));
+) -> Result<Option<PressTarget>, AppError> {
+    if args.app.is_none() && args.window_id.is_none() {
+        return Ok(None);
     }
-    args.app
-        .as_deref()
-        .map(|app| crate::commands::helpers::resolve_app(Some(app), adapter, deadline))
-        .transpose()
-        .map(|app| app.map(|app| (app, None)))
+    let (resolved, kept) = super::window_affinity::with_sticky_window(
+        context,
+        args.app.as_deref(),
+        args.window_id.as_deref(),
+        true,
+        |window_id| resolve_target(args.app.as_deref(), window_id, adapter, deadline),
+    )?;
+    Ok(Some((resolved.0, resolved.1, kept)))
+}
+
+fn resolve_target(
+    app: Option<&str>,
+    window_id: Option<&str>,
+    adapter: &dyn PlatformAdapter,
+    deadline: crate::Deadline,
+) -> Result<(crate::AppInfo, Option<crate::WindowInfo>), AppError> {
+    let Some(window_id) = window_id else {
+        let app = crate::commands::helpers::resolve_app(app, adapter, deadline)?;
+        return Ok((app, None));
+    };
+    let window = crate::snapshot::resolve_window(adapter, app, Some(window_id), deadline)?;
+    let app = crate::system::app_lookup::resolve_app_owning(&window, adapter, deadline)?;
+    Ok((app, Some(window)))
+}
+
+fn kept_note(
+    affinity: &super::window_affinity::Affinity,
+    window: &crate::WindowInfo,
+) -> Option<Value> {
+    super::window_affinity::kept_note(affinity, window.state.is_focused)
 }
 
 #[cfg(test)]

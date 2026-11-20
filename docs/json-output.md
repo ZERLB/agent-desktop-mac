@@ -189,7 +189,7 @@ When a ref action returns `delivery_uncertain` with a post-action wait selector,
 
 ## Window affinity
 
-A `snapshot`, `find` or `screenshot` that names `--app` without `--window-id` on the window surface uses the window of the caller's last whole-window snapshot of that app, while that window exists, instead of the app's focused window. The window is remembered per session and agent for 12 hours in `window_affinity.json` under the state root, or under the session folder, and forgotten when it no longer resolves. A snapshot that kept a window which is not the focused one carries:
+A `snapshot`, `find` or `screenshot` that names `--app` without `--window-id` on the window surface, and a `press` that names `--app` without `--window-id`, uses the window of the caller's last whole-window snapshot of that app, while that window exists, instead of the app's focused window. The window is remembered per session and agent for 12 hours in `window_affinity.json` under the state root, or under the session folder, and forgotten when it no longer resolves. A `snapshot` or `press` that kept a window which is not the focused one carries:
 
 ```json
 "window_affinity": {
@@ -198,6 +198,20 @@ A `snapshot`, `find` or `screenshot` that names `--app` without `--window-id` on
   "note": "Kept the window this caller last snapshotted for this app, not the app's focused window; pass --window-id to target another window."
 }
 ```
+
+On macOS a key posted to a process reaches its key window. A `press` whose window does not hold the keyboard and cannot take it without disturbing the person fails with `ACTION_NOT_SUPPORTED`, `disposition.delivery: not_delivered` and:
+
+```json
+"details": {
+  "kind": "window_not_key",
+  "check": "window_active",
+  "cause": "sibling_window_holds_keyboard",
+  "window_id": "w-6758",
+  "physical_delivery_started": false
+}
+```
+
+`cause` is `sibling_window_holds_keyboard` when the application is frontmost with another window active, `application_hidden`, `window_minimized`, or `main_window_write_refused` and `main_window_not_observed` when the application did not accept the change.
 
 ## Find result shape
 

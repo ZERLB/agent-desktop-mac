@@ -1,6 +1,6 @@
 use agent_desktop_core::{
     ActionResult, ActionStep, AdapterError, Deadline, DeliverySemantics, ErrorCode,
-    InteractionPolicy, KeyCombo, ProcessIdentity, StepMechanism,
+    InteractionPolicy, KeyCombo, ProcessIdentity, StepMechanism, WindowInfo,
 };
 use std::time::{Duration, Instant};
 
@@ -17,6 +17,41 @@ pub(crate) fn press_for_app_impl(
 ) -> Result<ActionResult, AdapterError> {
     press_for_app(process, combo, policy, deadline)
         .map_err(|error| crate::actions::DeliveryTracker::default().annotate(error))
+}
+
+/// Sends `combo` to the process that owns `window` once that window holds the
+/// application's keyboard. Keys posted to a process reach its key window, so a
+/// window behind a sibling takes the keyboard first when the application is in
+/// the background, and is refused when the application is in front.
+pub(crate) fn press_for_window_impl(
+    window: &WindowInfo,
+    combo: &KeyCombo,
+    policy: InteractionPolicy,
+    deadline: Deadline,
+) -> Result<ActionResult, AdapterError> {
+    let instance = window
+        .process_instance
+        .as_deref()
+        .filter(|instance| !instance.is_empty())
+        .ok_or_else(|| {
+            AdapterError::stale_ref_because("Window has no process-instance identity")
+                .with_disposition(DeliverySemantics::not_delivered())
+        })?;
+    let process = ProcessIdentity::new(window.pid, instance);
+    let pid = crate::system::process::process_identity::require_core(&process)?.pid();
+    let element = crate::system::window::window_resolve::window_element_for_info(window, deadline)?;
+    let claim = crate::system::window::window_key::claim(&element, pid, deadline)?;
+    if let crate::system::window::window_key::KeyClaim::Refused(cause) = claim {
+        return Err(crate::system::window::window_key::refusal(
+            cause,
+            Some(&window.id),
+        ));
+    }
+    let mut result = press_for_app_impl(process, combo, policy, deadline)?;
+    if claim.made_key() {
+        result.steps.insert(0, semantic_step("AXMain window"));
+    }
+    Ok(result)
 }
 
 fn press_for_app(

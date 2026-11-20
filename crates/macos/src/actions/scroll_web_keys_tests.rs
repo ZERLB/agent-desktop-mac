@@ -1,4 +1,4 @@
-use super::{arrow_key, consumes_arrow_keys, moved_toward, overlaps};
+use super::{arrow_key, consumes_arrow_keys, intersection, moved_toward, overlaps};
 use agent_desktop_core::{Direction, Rect};
 
 fn rect(x: f64, y: f64) -> Rect {
@@ -74,4 +74,51 @@ fn only_an_element_inside_the_viewport_counts_as_on_screen() {
     assert!(!overlaps(&rect(10.0, 700.0), &viewport));
     assert!(!overlaps(&rect(10.0, 60.0), &viewport));
     assert!(!overlaps(&rect(900.0, 300.0), &viewport));
+}
+
+#[test]
+fn a_whole_document_frame_is_clipped_to_the_container_that_shows_it() {
+    let document = Rect {
+        x: 0.0,
+        y: -1500.0,
+        width: 1200.0,
+        height: 4000.0,
+    };
+    let container = Rect {
+        x: 0.0,
+        y: 90.0,
+        width: 1200.0,
+        height: 800.0,
+    };
+
+    let visible = intersection(&document, &container).expect("the document is on screen");
+
+    assert_eq!(visible, container);
+    assert!(!overlaps(&rect(10.0, 1800.0), &visible));
+    assert!(overlaps(&rect(10.0, 300.0), &visible));
+}
+
+#[test]
+fn frames_that_do_not_meet_have_no_visible_part() {
+    let first = rect(0.0, 0.0);
+    assert_eq!(intersection(&first, &rect(500.0, 0.0)), None);
+    assert_eq!(intersection(&first, &rect(0.0, 20.0)), None);
+}
+
+#[test]
+fn an_element_clamped_to_a_sliver_on_the_viewport_edge_is_off_screen() {
+    let viewport = Rect {
+        x: 22.0,
+        y: 195.0,
+        width: 1200.0,
+        height: 796.0,
+    };
+    let clamped = Rect {
+        x: 46.0,
+        y: 990.0,
+        width: 109.0,
+        height: 1.0,
+    };
+
+    assert!(!overlaps(&clamped, &viewport));
 }

@@ -232,6 +232,16 @@ impl SystemOps for MacOSAdapter {
         crate::system::key_dispatch::press_for_app_impl(process, combo, policy, lease.deadline())
     }
 
+    fn press_key_for_window(
+        &self,
+        window: &WindowInfo,
+        combo: &agent_desktop_core::KeyCombo,
+        policy: agent_desktop_core::InteractionPolicy,
+        lease: &InteractionLease,
+    ) -> Result<ActionResult, AdapterError> {
+        crate::system::key_dispatch::press_for_window_impl(window, combo, policy, lease.deadline())
+    }
+
     fn wait_for_menu(
         &self,
         process: ProcessIdentity,

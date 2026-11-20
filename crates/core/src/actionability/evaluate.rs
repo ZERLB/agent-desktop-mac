@@ -164,7 +164,7 @@ fn build_report_with_requirement(
         &evidence.available_actions,
         pointer_delivery,
     );
-    if requirements.visible {
+    if requirements.visible && !gates::scrolls_container_on_its_behalf(evidence, request) {
         let requires_geometry =
             requirements.requires_geometry(request, &evidence.available_actions);
         let visibility = gates::visibility(evidence, requires_geometry, without_pointer);

@@ -346,3 +346,45 @@ fn matching_window_id_with_a_different_or_unknown_owner_refuses_without_delivery
         assert!(adapter.pressed_pid.lock().unwrap().is_none());
     }
 }
+
+fn remember_window(id: &str, pid: u32) {
+    let mut kept = window(pid);
+    kept.id = id.into();
+    crate::commands::window_affinity::remember(&CommandContext::default(), Some("Electron"), &kept);
+}
+
+#[test]
+fn an_app_name_keeps_the_window_the_caller_last_snapshotted() {
+    let _home = crate::refs::refs_test_support::HomeGuard::new();
+    remember_window("w-42-prefs", 42);
+    let adapter = with_active("w-42-prefs", 42);
+
+    let response = press(Some("Electron"), None, &adapter).unwrap();
+
+    assert_eq!(*adapter.pressed_pid.lock().unwrap(), Some(42));
+    assert_eq!(response["window_affinity"]["window_id"], "w-42-prefs");
+}
+
+#[test]
+fn a_kept_window_that_lost_the_keyboard_gets_no_key() {
+    let _home = crate::refs::refs_test_support::HomeGuard::new();
+    remember_window("w-42-prefs", 42);
+    let adapter = with_active("w-42", 42);
+
+    let error = press(Some("Electron"), None, &adapter).unwrap_err();
+
+    assert_eq!(error.code(), "STALE_REF");
+    assert!(adapter.pressed_pid.lock().unwrap().is_none());
+}
+
+#[test]
+fn a_kept_window_that_is_gone_falls_back_to_the_app_name() {
+    let _home = crate::refs::refs_test_support::HomeGuard::new();
+    remember_window("w-gone", 42);
+    let adapter = with_active("w-42", 42);
+
+    let error = press(Some("Electron"), None, &adapter).unwrap_err();
+
+    assert_eq!(error.code(), "AMBIGUOUS_TARGET");
+    assert!(adapter.pressed_pid.lock().unwrap().is_none());
+}
