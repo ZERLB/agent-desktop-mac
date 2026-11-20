@@ -5,6 +5,8 @@ use agent_desktop_core::{
 use crate::tree::AXElement;
 
 const MAX_SCROLL_AMOUNT: u32 = 1_000;
+const VALUE_SHIFT_STEP: std::time::Duration = std::time::Duration::from_millis(40);
+const VALUE_SHIFT_ATTEMPTS: u32 = 8;
 
 /// Scrolls through the element's published scroll mechanism and, for web
 /// content that publishes none, through arrow keys sent to the key window
@@ -214,11 +216,17 @@ fn try_value_shift(
     if !result? {
         return Ok(false);
     }
-    let observed = crate::actions::scroll_read::number(bar, "AXValue", deadline)
-        .map_err(value_write_unverified)?
-        .ok_or_else(|| value_write_unverified(missing_value_after_write()))?;
-    if value_shift_verified(current, observed, direction) {
-        return Ok(true);
+    for _ in 0..VALUE_SHIFT_ATTEMPTS {
+        let observed = crate::actions::scroll_read::number(bar, "AXValue", deadline)
+            .map_err(value_write_unverified)?
+            .ok_or_else(|| value_write_unverified(missing_value_after_write()))?;
+        if value_shift_verified(current, observed, direction) {
+            return Ok(true);
+        }
+        let Ok(pause) = deadline.remaining_slice(VALUE_SHIFT_STEP) else {
+            break;
+        };
+        std::thread::sleep(pause);
     }
     Err(value_write_unverified(AdapterError::new(
         ErrorCode::ActionFailed,
