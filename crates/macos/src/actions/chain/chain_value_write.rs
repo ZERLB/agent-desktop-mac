@@ -18,6 +18,7 @@ mod imp {
             crate::tree::web_content::focus_web_text_control(element, deadline);
         }
         prepare(element, deadline)?;
+        let before = crate::tree::copy_value_typed(element, deadline);
         let uncertain = if attribute == "AXValue" {
             ax_helpers::set_ax_value_coerced(element, value, deadline).err()
         } else {
@@ -47,15 +48,31 @@ mod imp {
         let role = ax_helpers::element_role(element, deadline)
             .map_err(|error| delivery.annotate(error))?;
         let observed = crate::tree::copy_value_typed(element, deadline);
-        Ok(DeliveryOutcome::from_delivery(
-            true,
-            chain_verify::dynamic_write_had_effect(
-                attribute,
-                role.as_deref(),
-                value,
-                observed.as_deref(),
-            ),
-        ))
+        let verified = chain_verify::dynamic_write_had_effect(
+            attribute,
+            role.as_deref(),
+            value,
+            observed.as_deref(),
+        );
+        if ignored_by_stepping_control(verified, before == observed)
+            && steps_by_action(element, deadline)
+        {
+            return Ok(DeliveryOutcome::NotDelivered);
+        }
+        Ok(DeliveryOutcome::from_delivery(true, verified))
+    }
+
+    /// A web slider accepts an `AXValue` write and keeps its value. A write
+    /// that changed nothing was not delivered in any useful sense, so a
+    /// control that also steps by action is left to the stepping that follows.
+    pub(super) fn ignored_by_stepping_control(verified: bool, unchanged: bool) -> bool {
+        !verified && unchanged
+    }
+
+    fn steps_by_action(element: &AXElement, deadline: Deadline) -> bool {
+        ["AXIncrement", "AXDecrement"]
+            .into_iter()
+            .any(|action| ax_helpers::advertises_action(element, action, deadline) == Some(true))
     }
 
     pub(crate) fn increment_to_value(

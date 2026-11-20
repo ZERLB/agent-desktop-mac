@@ -29,7 +29,9 @@ pub(crate) fn select_from_menu(
         )
         .with_suggestion("Use click to open the control, then snapshot the menu."));
     }
-    let result = select_open_menu_item(pid, identity, value, deadline);
+    let web_control =
+        crate::tree::web_content::is_inside_web_area(element, deadline).then_some(element);
+    let result = select_open_menu_item(pid, identity, value, web_control, deadline);
     match result {
         Ok(_) if exposes_value => {
             verify_selected_value(element, value, deadline).map_err(after_menu_delivery)
@@ -139,6 +141,7 @@ fn select_open_menu_item(
     pid: i32,
     identity: crate::system::process::process_identity::ProcessIdentity,
     value: &str,
+    web_control: Option<&AXElement>,
     deadline: Deadline,
 ) -> Result<bool, AdapterError> {
     loop {
@@ -159,6 +162,11 @@ fn select_open_menu_item(
                 wait_for_menu_to_close(pid, deadline)
             };
         }
+        if let Some(control) = web_control
+            && let Some(option) = super::select_web_list::open_list_item(control, value, deadline)?
+        {
+            return press_candidate(&option, deadline).map(|_| false);
+        }
         if deadline.is_expired() {
             return Err(deadline.timeout_error().with_details(serde_json::json!({
                 "kind": "select_menu_item_not_found",
@@ -171,7 +179,7 @@ fn select_open_menu_item(
     }
 }
 
-fn find_named_descendant(
+pub(super) fn find_named_descendant(
     root: &AXElement,
     value: &str,
     deadline: Deadline,

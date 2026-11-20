@@ -57,6 +57,53 @@ pub(crate) fn focuses_in_background(element: &AXElement, deadline: Deadline) -> 
     error == accessibility_sys::kAXErrorSuccess
 }
 
+/// Gives a web page the focus of its application when nothing on the page
+/// holds it. A page without focus refuses the clipboard to the handler of a
+/// pressed button, even in a background window. A page that already has a
+/// focused element is left alone, because moving the focus would close what
+/// that element keeps open. Only a runtime that focuses in the background is
+/// written to: any other would bring its application forward.
+#[cfg(target_os = "macos")]
+pub(crate) fn focus_page_without_focus(element: &AXElement, deadline: Deadline) {
+    if !focuses_in_background(element, deadline) || page_holds_focus(element, deadline) {
+        return;
+    }
+    let focus = |target: &AXElement| {
+        matches!(
+            crate::actions::ax_helpers::set_ax_bool_or_err(target, "AXFocused", true, deadline),
+            Ok(true)
+        )
+    };
+    if !focus(element)
+        && let Ok(Some(web_area)) =
+            crate::actions::scroll_web_keys::enclosing_web_area(element, deadline)
+    {
+        focus(&web_area);
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn page_holds_focus(element: &AXElement, deadline: Deadline) -> bool {
+    let Some(pid) =
+        crate::system::app::app_ops::pid_from_element(element, deadline).filter(|pid| *pid > 0)
+    else {
+        return true;
+    };
+    let app = super::element_for_pid(pid);
+    let read = |source: &AXElement, attribute: &str| {
+        super::properties::attributes::copy_element_attr_result(source, attribute, deadline)
+            .ok()
+            .flatten()
+    };
+    let Some(focused) = read(&app, "AXFocusedUIElement") else {
+        return false;
+    };
+    let same_window = read(element, "AXWindow")
+        .zip(read(&focused, "AXWindow"))
+        .is_some_and(|(own, other)| super::properties::capabilities::same_element(&own, &other));
+    same_window && is_inside_web_area(&focused, deadline)
+}
+
 /// Moves keyboard focus to a web text control inside its own application, without
 /// activating the application. Returns whether the element is web content, so the
 /// caller knows the web fallbacks apply even when the focus write was refused.

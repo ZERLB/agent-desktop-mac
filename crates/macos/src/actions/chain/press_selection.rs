@@ -32,6 +32,7 @@ mod imp {
         element: &AXElement,
         deadline: Deadline,
     ) -> Result<DeliveryOutcome, AdapterError> {
+        crate::tree::web_content::focus_page_without_focus(element, deadline);
         let pressed =
             crate::actions::ax_helpers::perform_observed_action(element, "AXPress", deadline)?;
         if pressed != DeliveryOutcome::DeliveredUnverified {

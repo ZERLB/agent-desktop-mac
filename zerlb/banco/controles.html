@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Controles agent-desktop</title>
+<style>
+  body { font: 16px -apple-system, system-ui, sans-serif; margin: 24px; max-width: 640px; }
+  section { margin: 18px 0; padding: 10px; border: 1px solid #ccd; }
+  h2 { font-size: 16px; margin: 0 0 8px; }
+  [role=combobox] { border: 1px solid #667; padding: 6px; cursor: pointer; }
+  [role=listbox] { border: 1px solid #667; margin: 0; padding: 0; list-style: none; display: none; }
+  [role=listbox].abierta { display: block; }
+  [role=option] { padding: 6px; cursor: pointer; }
+  [role=option]:hover { background: #dde; }
+  #estado { margin-top: 16px; padding: 10px; background: #eef; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>Controles</h1>
+<p>Controles que fallaron en tareas reales con paneles web. Cada uno anota en «Estado» lo que la página recibió.</p>
+
+<section>
+  <h2>Lista desplegable hecha por la página</h2>
+  <div id="industria" role="combobox" tabindex="0" aria-haspopup="listbox" aria-expanded="false"
+       aria-controls="opciones" aria-label="Industria">Elige una industria</div>
+  <ul id="opciones" role="listbox" aria-label="Industrias">
+    <li role="option" id="op-comercio" aria-selected="false">Comercio</li>
+    <li role="option" id="op-educacion" aria-selected="false">Educación</li>
+    <li role="option" id="op-salud" aria-selected="false">Salud</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Botón que copia al portapapeles</h2>
+  <button id="copiar" type="button">Copiar clave</button>
+</section>
+
+<section>
+  <h2>Deslizador</h2>
+  <label for="grosor">Grosor de la línea</label>
+  <input id="grosor" type="range" min="0" max="10" step="1" value="3" aria-label="Grosor de la línea">
+</section>
+
+<div id="estado" role="status" aria-live="polite">Estado: sin acciones</div>
+
+<script>
+const estado = document.getElementById('estado');
+const lineas = {};
+function anotar(clave, texto) {
+  lineas[clave] = texto;
+  estado.textContent = 'Estado: ' + Object.entries(lineas).map(([k, v]) => k + '=' + v).join(' · ');
+}
+function gesto(e) {
+  return 'confiable:' + e.isTrusted + ',gesto:' + (navigator.userActivation ? navigator.userActivation.isActive : '?') +
+    ',foco:' + document.hasFocus();
+}
+
+const combo = document.getElementById('industria');
+const lista = document.getElementById('opciones');
+function abrir(si) {
+  lista.classList.toggle('abierta', si);
+  combo.setAttribute('aria-expanded', String(si));
+}
+combo.addEventListener('click', () => abrir(!lista.classList.contains('abierta')));
+combo.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') { abrir(true); e.preventDefault(); }
+  if (e.key === 'Escape') abrir(false);
+});
+lista.querySelectorAll('[role=option]').forEach(opcion => {
+  opcion.addEventListener('click', e => {
+    lista.querySelectorAll('[role=option]').forEach(o => o.setAttribute('aria-selected', String(o === opcion)));
+    combo.textContent = opcion.textContent;
+    abrir(false);
+    anotar('industria', opcion.textContent + '(' + gesto(e) + ')');
+  });
+});
+
+document.getElementById('copiar').addEventListener('click', async e => {
+  const como = gesto(e);
+  try {
+    await navigator.clipboard.writeText('clave-copiada-' + Date.now());
+    anotar('copiar', 'ok(' + como + ')');
+  } catch (error) {
+    anotar('copiar', 'fallo:' + error.name + '(' + como + ')');
+  }
+});
+
+const grosor = document.getElementById('grosor');
+grosor.addEventListener('input', () => anotar('grosor', grosor.value));
+</script>
+</body>
+</html>

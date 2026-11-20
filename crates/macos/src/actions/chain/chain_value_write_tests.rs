@@ -67,3 +67,10 @@ fn increment_requires_the_requested_fractional_value() {
         "0.3"
     ));
 }
+
+#[test]
+fn a_write_that_changed_nothing_leaves_a_stepping_control_to_its_steps() {
+    assert!(super::imp::ignored_by_stepping_control(false, true));
+    assert!(!super::imp::ignored_by_stepping_control(true, true));
+    assert!(!super::imp::ignored_by_stepping_control(false, false));
+}
