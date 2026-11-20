@@ -4,7 +4,10 @@ impl AdapterError {
     /// Records a complete lookup that proved the requested surface absent.
     pub fn surface_absent(surface: SnapshotSurface, message: &str) -> Self {
         let suggestion = if surface == SnapshotSurface::Menu {
-            "Open the menu, then take a fresh snapshot with --surface menu".to_owned()
+            "Open the menu, then take a fresh snapshot with --surface menu. A menu that a web page or \
+             an Electron app draws itself is page content, not a native menu: read it with a plain \
+             'snapshot' or 'find --role menuitem'"
+                .to_owned()
         } else {
             format!(
                 "Ensure the application exposes the {} surface, then take a fresh snapshot with --surface {}",

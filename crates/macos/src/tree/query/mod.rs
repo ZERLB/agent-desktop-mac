@@ -244,6 +244,7 @@ fn resolve_window_surface(
                         ErrorCode::ElementNotFound,
                         format!("No open {} in window {}", surface.as_str(), window.id),
                     )
+                    .with_suggestion(crate::tree::window_surface::WEB_SURFACE_HINT)
                 },
             )?
         }

@@ -3,6 +3,10 @@ use std::time::Instant;
 
 use super::AXElement;
 
+/// A sheet, popover or alert that web content draws is part of the page and
+/// never a native surface of its window.
+pub(crate) const WEB_SURFACE_HINT: &str = "Open the surface, then retry. A dialog, popover or alert that a web page or an Electron app draws itself is page content, not a native surface: read it with a plain 'snapshot'";
+
 pub(crate) fn surface_for_window(
     window: &WindowInfo,
     surface: SnapshotSurface,
