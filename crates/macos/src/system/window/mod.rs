@@ -2,6 +2,7 @@ pub(crate) mod app_front_guard;
 pub(crate) mod cg_window;
 pub(crate) mod cg_window_cover;
 pub(crate) mod cg_window_exact;
+pub(crate) mod person_front;
 pub(crate) mod window_ax_state;
 pub(crate) mod window_bridge;
 pub(crate) mod window_front_guard;

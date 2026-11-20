@@ -199,7 +199,7 @@ A `snapshot`, `find` or `screenshot` that names `--app` without `--window-id` on
 }
 ```
 
-On macOS a key posted to a process reaches its key window, so a `press` whose window does not hold the keyboard is handed it for the key and reports the step `KeyWindowHandOver`. A headless shortcut that opens a window reports `PersonWindowKeptInFront` when the person's window in that app was put back in front of the new one, and `PersonAppKeptInFront` when the app came forward and the app the person was in was put back in front of it. A `press` that cannot be handed the keyboard without disturbing the person fails with `ACTION_NOT_SUPPORTED`, `disposition.delivery: not_delivered` and:
+On macOS a key posted to a process reaches its key window, so a `press` whose window does not hold the keyboard is handed it for the key and reports the step `KeyWindowHandOver`. A headless shortcut or ref action that opens a window reports `PersonWindowKeptInFront` when the person's window in that app was put back in front of the new one, and `PersonAppKeptInFront` when the app came forward and the app the person was in was put back in front of it. A `press` that cannot be handed the keyboard without disturbing the person fails with `ACTION_NOT_SUPPORTED`, `disposition.delivery: not_delivered` and:
 
 ```json
 "details": {

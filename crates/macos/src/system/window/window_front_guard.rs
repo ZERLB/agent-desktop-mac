@@ -15,7 +15,6 @@ use super::window_key_switch::key_window;
 use crate::tree::AXElement;
 
 const WATCH_STEP: Duration = Duration::from_millis(40);
-const WATCH_ATTEMPTS: u32 = 12;
 const RESTORE_ATTEMPTS: u32 = 10;
 const BUDGET_MS: u64 = 2_000;
 const MAX_KNOWN_WINDOWS: usize = 64;
@@ -48,13 +47,14 @@ pub(crate) fn watch(pid: i32, deadline: Deadline) -> Option<FrontWindowGuard> {
 }
 
 impl FrontWindowGuard {
-    /// Waits for a window that did not exist to take the front and puts the
-    /// person's window back in front of it. Returns whether it did.
-    pub(crate) fn restore(self) -> bool {
+    /// Looks `looks` times, a step apart, for a window that did not exist in
+    /// front and puts the person's window back in front of it. Returns
+    /// whether it did.
+    pub(crate) fn restore(self, looks: u32) -> bool {
         let Ok(deadline) = Deadline::detached_after(BUDGET_MS) else {
             return false;
         };
-        for _ in 0..WATCH_ATTEMPTS {
+        for _ in 0..looks {
             if self.new_window_took_the_front(deadline) {
                 return self.bring_person_forward(deadline);
             }

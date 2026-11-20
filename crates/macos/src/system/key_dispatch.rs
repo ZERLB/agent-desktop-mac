@@ -4,10 +4,14 @@ use agent_desktop_core::{
 };
 use std::time::{Duration, Instant};
 
+use crate::system::window::person_front::{self, Patience, PersonFront};
 use crate::tree::AXElement;
 
-#[path = "key_dispatch_front.rs"]
-mod front;
+const SHORTCUT_PATIENCE: Patience = Patience {
+    window_looks: 12,
+    app_looks: 30,
+};
+
 #[path = "key_dispatch_menu.rs"]
 mod menu;
 
@@ -17,12 +21,40 @@ pub(crate) fn press_for_app_impl(
     policy: InteractionPolicy,
     deadline: Deadline,
 ) -> Result<ActionResult, AdapterError> {
-    let front = front::watch(&process, combo, policy, deadline);
+    let front = person_front(&process, combo, policy, deadline);
     let result = {
         let _awake = wake_for_shortcut(&process, combo, policy, deadline);
         deliver(process, combo, policy, deadline)
     };
-    front::keep(front, result)
+    keep_person_in_front(front, result)
+}
+
+/// A headless shortcut can open a new window, which comes up in front of the
+/// window the person is using in that application, or brings a background
+/// application forward with it.
+fn person_front(
+    process: &ProcessIdentity,
+    combo: &KeyCombo,
+    policy: InteractionPolicy,
+    deadline: Deadline,
+) -> Option<PersonFront> {
+    if policy.allow_focus_steal || !is_shortcut(combo) {
+        return None;
+    }
+    let pid = crate::system::process::process_identity::require_core(process)
+        .ok()?
+        .pid();
+    Some(person_front::watch(pid, SHORTCUT_PATIENCE, deadline))
+}
+
+fn keep_person_in_front(
+    front: Option<PersonFront>,
+    result: Result<ActionResult, AdapterError>,
+) -> Result<ActionResult, AdapterError> {
+    match front {
+        Some(front) => front.keep(SHORTCUT_PATIENCE, result),
+        None => result,
+    }
 }
 
 fn deliver(
@@ -103,13 +135,13 @@ pub(crate) fn press_for_window_impl(
     let process = ProcessIdentity::new(window.pid, instance);
     crate::system::process::process_identity::require_core(&process)?;
     let element = crate::system::window::window_resolve::window_element_for_info(window, deadline)?;
-    let front = front::watch(&process, combo, policy, deadline);
+    let front = person_front(&process, combo, policy, deadline);
     let target = TargetWindow {
         element: &element,
         id: &window.id,
     };
     let result = press_in_claimed_window(target, process, combo, policy, deadline);
-    front::keep(front, result)
+    keep_person_in_front(front, result)
 }
 
 struct TargetWindow<'a> {

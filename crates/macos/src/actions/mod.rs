@@ -13,6 +13,8 @@ pub(crate) mod delivery_tracker;
 pub(crate) mod dispatch;
 pub(crate) mod extras;
 mod native_menu;
+#[cfg(target_os = "macos")]
+mod person_front;
 mod physical_click;
 mod physical_keyboard;
 mod physical_target;

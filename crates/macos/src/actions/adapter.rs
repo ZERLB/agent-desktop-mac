@@ -58,7 +58,10 @@ fn execute_action_impl(
     request: ActionRequest,
     lease: &InteractionLease,
 ) -> Result<ActionResult, AdapterError> {
-    crate::actions::perform_action(ax_element(handle)?, &request, lease.deadline())
+    let element = ax_element(handle)?;
+    let front = crate::actions::person_front::watch(element, &request, lease.deadline());
+    let result = crate::actions::perform_action(element, &request, lease.deadline());
+    crate::actions::person_front::keep(front, &request.action, result)
 }
 
 fn execute_global_action(
